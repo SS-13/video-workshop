@@ -2,10 +2,10 @@
 
 ## Automated Tests
 
-- Control Plane: `36 passed`
+- Control Plane: `37 passed`
 - Video Edit: `8 passed`
 - Daily Engineering Loop: `11 passed`
-- Total: `55 passed`
+- Total: `56 passed`
 
 ## Registry And Contracts
 
@@ -30,6 +30,9 @@ A temporary workspace containing only Git-eligible files passed:
 
 The clone reported `readyForContent=true`, `readyForRender=true`, and
 `loopReady=true` on the verification machine.
+
+Bootstrap coverage also verifies that every required ignored directory exists
+and that a second initialization preserves locally edited seed files.
 
 ## Privacy And Portability
 

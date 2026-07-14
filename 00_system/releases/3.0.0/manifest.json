@@ -45,15 +45,16 @@
     "realVideoCanary": "pass",
     "manualActivation": "pass",
     "cleanCloneBootstrap": "pass",
+    "completePrivateWorkspaceBootstrap": "pass",
     "privacyBoundary": "pass",
     "coverPairSmoke": "pass"
   },
   "evidence": {
     "testCounts": {
-      "controlPlane": 36,
+      "controlPlane": 37,
       "editing": 8,
       "evolution": 11,
-      "total": 55
+      "total": 56
     },
     "registry": {
       "contentTypes": 3,
@@ -68,7 +69,7 @@
     "rollbackPlan": "00_system/releases/3.0.0/rollback.yaml",
     "releaseAgent": ".codex/agents/release-agent.md",
     "activeRunCommand": "python3 09_tools/vp.py run finalize-active --date <YYYY-MM-DD>",
-    "cleanClone": "setup + doctor + Day1 + Observation + locked TopK pass",
+    "cleanClone": "setup + complete private workspace + doctor + Day1 + Observation + locked TopK pass",
     "privateMediaEvidencePublished": false
   }
 }

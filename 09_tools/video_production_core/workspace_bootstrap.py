@@ -28,11 +28,16 @@ WORKSPACE_DIRECTORIES = [
   "05_exports",
   "06_logs",
   "10_skills/personal-speaking-style",
+  "11_templates/audio/bgm",
+  "11_templates/pencil-cover-demos",
   "11_templates/关键词收集",
+  "12_research",
   "13_predictions",
   "15_cover_gallery",
   "16_monthly_archive",
+  "17_reports/audits",
   "17_reports/evolution",
+  "17_reports/releases",
   "18_learning",
 ]
 
@@ -238,6 +243,15 @@ def initialize_workspace(root: Path) -> Dict[str, Any]:
     root / "11_templates" / "关键词收集" / "专有名词清单.md": (
       "# 本地专有名词\n\n"
       "这里记录人名、产品名、书名、电影名和领域词汇。该文件默认不进入 Git。\n"
+    ),
+    root / "12_research" / "high-frequency-questions.md": (
+      "# 高频问题清单\n\n"
+      "这个文件用于记录反复值得讨论的问题，只保留问题和简短线索。\n\n"
+      "## 待整理\n\n"
+      "- \n\n"
+      "## 使用规则\n\n"
+      "- 生成脚本时只作为参考，不覆盖当天真实想法。\n"
+      "- 每隔一段时间集中整理，不在当天出片时扩展系统。\n"
     ),
     root / "10_skills" / "personal-speaking-style" / "SKILL.md": (
       "# Personal Speaking Style\n\n"

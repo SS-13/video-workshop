@@ -45,12 +45,23 @@ The initializer creates local-only directories and seed files under:
 05_exports/
 06_logs/
 10_skills/personal-speaking-style/
+11_templates/audio/bgm/
+11_templates/pencil-cover-demos/
 11_templates/关键词收集/
+12_research/
+13_predictions/
 15_cover_gallery/
+16_monthly_archive/
+17_reports/audits/
 17_reports/evolution/
+17_reports/releases/
+18_learning/
 ```
 
-These paths remain protected by `.gitignore`.
+These paths remain protected by `.gitignore`. The initializer also seeds local
+ledgers, personalization files, vocabulary files, and
+`12_research/high-frequency-questions.md`. Existing local content is never
+overwritten.
 
 ## First AI Read
 

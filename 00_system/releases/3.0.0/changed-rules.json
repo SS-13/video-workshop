@@ -48,7 +48,7 @@
     {
       "id": "public-bootstrap",
       "scope": "workspace-bootstrap",
-      "summary": "Initialize ignored local workspaces and expose one ordered AI context entry after a clean clone.",
+      "summary": "Initialize every required ignored local workspace directory and seed file, then expose one ordered AI context entry after a clean clone.",
       "rollbackImpact": "none on existing local content"
     },
     {

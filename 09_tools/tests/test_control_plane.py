@@ -41,6 +41,7 @@ from video_production_core.release_transition import (  # noqa: E402
 from video_production_core.state_reconcile import reconcile_state  # noqa: E402
 from video_production_core.workspace_bootstrap import (  # noqa: E402
   CONTENT_LEDGER_FIELDS,
+  WORKSPACE_DIRECTORIES,
   build_ai_context,
   doctor_workspace,
   initialize_workspace,
@@ -126,6 +127,29 @@ class WorkspaceBootstrapTest(unittest.TestCase):
         encoding="utf-8"
       ).strip()
       self.assertEqual(ledger_header, ",".join(CONTENT_LEDGER_FIELDS))
+
+  def test_initialization_creates_complete_private_workspace_without_overwriting_seed(self):
+    with tempfile.TemporaryDirectory() as directory:
+      root = Path(directory)
+      self.make_minimal_core(root)
+
+      initialize_workspace(root)
+
+      for value in WORKSPACE_DIRECTORIES:
+        with self.subTest(directory=value):
+          self.assertTrue((root / value).is_dir())
+
+      seed = root / "12_research" / "high-frequency-questions.md"
+      self.assertTrue(seed.is_file())
+      seed.write_text("# Local questions\n\nKeep this edit.\n", encoding="utf-8")
+
+      second = initialize_workspace(root)
+
+      self.assertFalse(second["changed"])
+      self.assertEqual(
+        seed.read_text(encoding="utf-8"),
+        "# Local questions\n\nKeep this edit.\n",
+      )
 
   def test_clean_core_can_be_initialized_and_pass_doctor(self):
     with tempfile.TemporaryDirectory() as directory:

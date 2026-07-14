@@ -13,6 +13,11 @@ npm run doctor
 style override, a private vocabulary library, personalization state, and the
 Daily Engineering Loop directories. Existing files are never overwritten.
 
+This includes the production folders, cover/audio template folders, research,
+predictions, learning archives, and audit/evolution/release report folders that
+are intentionally absent from Git. A clean clone does not require any manual
+directory setup.
+
 ## 2. Let the AI Learn Local Content Once
 
 Ask the AI to read `AGENTS.md`, run `npm run context`, and follow the listed

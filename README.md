@@ -76,9 +76,11 @@ npm run edit:render-day-legacy -- --date YYYY-MM-DD --mode standard
 
 ## Local Personalization
 
-`npm run setup` creates ignored local files for speaking style, proper nouns,
-subtitle corrections, ledgers, and Loop state. `npm run context` tells the AI
-exactly which public files and user-approved local corpus files to read.
+`npm run setup` creates the complete ignored local workspace, including
+production, template, research, report, learning, speaking-style, vocabulary,
+ledger, and Loop paths. Existing local files are never overwritten.
+`npm run context` tells the AI exactly which public files and user-approved
+local corpus files to read.
 
 The AI distills stable patterns into:
 

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "components": {
+    "evolution-loop": {
+      "agent": "system-steward-agent",
+      "skill": "video-production-evolution",
+      "commands": ["vp observe", "vp evolve"],
+      "writeScope": [
+        "00_state/observations",
+        "00_state/evolution",
+        "00_state/locks",
+        "17_reports/evolution"
+      ]
+    },
+    "release-gate": {
+      "agent": "release-agent",
+      "skill": "video-production-release",
+      "commands": [
+        "vp release status",
+        "vp release canary-adopt",
+        "vp release canary-check",
+        "vp release readiness",
+        "vp release activate",
+        "vp release rollback",
+        "vp run finalize-active"
+      ],
+      "writeScope": [
+        "00_state/runs",
+        "00_state/releases/<candidate>/canary",
+        "00_system/releases/<candidate>/manifest.json",
+        "17_reports/releases/<candidate>"
+      ]
+    }
+  }
+}

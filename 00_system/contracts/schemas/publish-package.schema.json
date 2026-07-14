@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "video-production/publish-package.schema.json",
+  "type": "object",
+  "required": ["runId", "contentId", "platform", "title", "description", "chapters", "artifacts", "production", "publishReady"],
+  "properties": {
+    "runId": {"type": "string"},
+    "contentId": {"type": "string"},
+    "platform": {"type": "string"},
+    "title": {"type": "string"},
+    "description": {"type": "string"},
+    "chapters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["startSeconds", "time", "title"],
+        "properties": {
+          "startSeconds": {"type": "number", "minimum": 0},
+          "time": {"type": "string"},
+          "title": {"type": "string"}
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "required": ["video", "cover3x4", "cover4x3", "srt"],
+      "properties": {
+        "video": {"type": "string"},
+        "cover3x4": {"type": "string"},
+        "cover4x3": {"type": "string"},
+        "srt": {"type": "string"}
+      }
+    },
+    "production": {
+      "type": "object",
+      "required": ["videoDurationSeconds", "fileSizeBytes", "productionTotalMinutes", "subtitleQc", "compliance", "statsRecorded", "systemVersion"],
+      "properties": {
+        "videoDurationSeconds": {"type": "number", "minimum": 0},
+        "fileSizeBytes": {"type": "integer", "minimum": 0},
+        "productionTotalMinutes": {"type": "number", "minimum": 0},
+        "subtitleQc": {"type": "string", "enum": ["pass", "revise"]},
+        "compliance": {"type": "string", "enum": ["pass", "revise", "block"]},
+        "statsRecorded": {"type": "boolean"},
+        "systemVersion": {"type": "string"}
+      }
+    },
+    "publishReady": {"type": "boolean"}
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "name": "video-production-system",
+  "displayName": "视频制作系统",
+  "activeRelease": "3.0.0",
+  "candidateRelease": "3.0.0",
+  "defaultContentType": "video-diary",
+  "contentTypeRoot": "00_system/content-types",
+  "profileRoot": "00_system/profiles",
+  "runRoot": "00_state/runs",
+  "commandRegistry": "00_system/registries/commands.json",
+  "agentRegistry": "00_system/registries/agents.json",
+  "evolutionPolicy": "00_system/evolution-policy.json",
+  "ownerRegistry": "00_system/owner-registry.json"
+}

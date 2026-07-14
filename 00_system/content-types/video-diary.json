@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "video-diary",
+  "displayName": "视频日记",
+  "enabled": true,
+  "default": true,
+  "pathStrategy": "date-first",
+  "counter": {
+    "enabled": true,
+    "type": "day"
+  },
+  "profile": "video-diary-default"
+}

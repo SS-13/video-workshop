@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "suisuinian-default",
+  "displayName": "碎碎念默认流程",
+  "contentType": "suisuinian",
+  "agents": {
+    "inputReview": "compliance-agent",
+    "text": "text-agent",
+    "video": "video-agent",
+    "outputReview": "compliance-agent"
+  },
+  "skills": {
+    "intake": "video-diary-intake",
+    "script": "video-diary-script",
+    "cover": "video-diary-cover",
+    "edit": "video-diary-edit",
+    "log": "video-diary-log"
+  },
+  "commands": {
+    "initialize": "new-day",
+    "render": "edit:render-day-legacy",
+    "fallbackRender": "edit:render-day-legacy",
+    "promote": "edit:promote-final",
+    "publishPackage": "publish:package",
+    "finalizeRun": "run:finalize-active"
+  },
+  "quality": {
+    "subtitleSource": "real-spoken-audio",
+    "subtitleMaxLines": 2,
+    "combinedReview": true,
+    "publishPackageRequired": true,
+    "defaultBgm": false
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "items": [
+    {
+      "path": "05_exports/2030-01-01/2030-01-01_Day1_cover_3x4.jpg",
+      "start": 3.0,
+      "end": 6.0,
+      "position": "top-right",
+      "widthPercent": 30,
+      "margin": 40
+    }
+  ]
+}

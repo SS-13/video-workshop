@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Diary Edit"
+  short_description: "Trim, subtitle, and export diary video"
+  default_prompt: "Use $video-diary-edit to cut today's uploaded video diary and export the MP4."

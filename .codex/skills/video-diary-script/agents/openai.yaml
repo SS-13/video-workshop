@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Diary Script"
+  short_description: "Turn raw ideas into teleprompter scripts"
+  default_prompt: "Use $video-diary-script to generate today's video diary teleprompter script."

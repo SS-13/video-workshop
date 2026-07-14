@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Diary Cover"
+  short_description: "Render and archive routed covers"
+  default_prompt: "Use $video-diary-cover to render or revise a cover for 视频日记, 碎碎念, or 读书笔记."

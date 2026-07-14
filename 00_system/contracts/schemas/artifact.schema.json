@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "video-production/artifact.schema.json",
+  "type": "object",
+  "required": ["id", "runId", "stepId", "type", "label", "relativePath", "available"],
+  "properties": {
+    "id": {"type": "string"},
+    "runId": {"type": "string"},
+    "stepId": {"type": "string"},
+    "type": {"type": "string", "enum": ["text", "subtitle", "image", "video", "json", "report"]},
+    "label": {"type": "string"},
+    "mimeType": {"type": ["string", "null"]},
+    "relativePath": {"type": "string"},
+    "available": {"type": "boolean"},
+    "sizeBytes": {"type": ["integer", "null"], "minimum": 0},
+    "durationSeconds": {"type": ["number", "null"], "minimum": 0}
+  }
+}

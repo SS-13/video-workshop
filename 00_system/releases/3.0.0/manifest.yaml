@@ -1,0 +1,25 @@
+schemaVersion: 1
+version: 3.0.0
+status: active
+active: true
+stableFallback: 2.1.0
+canonicalManifest: 00_system/releases/3.0.0/manifest.json
+requiredGates:
+  - shortGoldenRegression
+  - fullHistoricalShadow
+  - legacyFallback
+  - candidateRunLifecycle
+  - canaryAdoptionTests
+  - releaseAgentOwnership
+  - activeRunFinalizationTests
+  - activeHookDormantOn2x
+  - realVideoCanary
+  - manualActivation
+  - cleanCloneBootstrap
+  - privacyBoundary
+activationPolicy:
+  automatic: false
+  command: python3 09_tools/vp.py release activate --confirm --actor user
+rollback:
+  release: 2.1.0
+  command: python3 09_tools/vp.py release rollback --confirm --actor user

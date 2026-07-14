@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "video-production/run.schema.json",
+  "type": "object",
+  "required": [
+    "id",
+    "workflowId",
+    "contentType",
+    "date",
+    "title",
+    "channel",
+    "systemVersion",
+    "status",
+    "currentStage",
+    "revision",
+    "steps",
+    "artifacts",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "id": {"type": "string"},
+    "workflowId": {"type": "string"},
+    "contentType": {"type": "string"},
+    "date": {"type": "string"},
+    "title": {"type": "string"},
+    "channel": {"type": "string", "enum": ["stable", "candidate", "canary"]},
+    "systemVersion": {"type": "string"},
+    "status": {
+      "type": "string",
+      "enum": ["pending", "running", "waiting_user", "succeeded", "failed", "canceled"]
+    },
+    "currentStage": {"type": "string"},
+    "revision": {"type": "integer", "minimum": 0},
+    "publishReady": {"type": "boolean"},
+    "createdAt": {"type": "string"},
+    "updatedAt": {"type": "string"},
+    "updatedBy": {"type": "string"},
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "status", "ownerAgent"],
+        "properties": {
+          "id": {"type": "string"},
+          "status": {"type": "string", "enum": ["pending", "running", "waiting_user", "succeeded", "failed", "skipped"]},
+          "ownerAgent": {"type": "string"},
+          "startedAt": {"type": ["string", "null"]},
+          "completedAt": {"type": ["string", "null"]},
+          "note": {"type": "string"}
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "runId", "stepId", "type", "label", "relativePath", "available"],
+        "properties": {
+          "id": {"type": "string"},
+          "runId": {"type": "string"},
+          "stepId": {"type": "string"},
+          "type": {"type": "string"},
+          "label": {"type": "string"},
+          "relativePath": {"type": "string"},
+          "available": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

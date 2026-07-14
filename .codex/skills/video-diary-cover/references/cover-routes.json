@@ -1,0 +1,121 @@
+{
+  "defaultRoute": "video-diary",
+  "routes": {
+    "video-diary": {
+      "defaultVersion": "v1.3.1",
+      "aliases": ["视频日记", "video-diary"],
+      "versions": {
+        "v1.2": {
+          "seriesLabel": "视频日记",
+          "titleMode": "free-title",
+          "metaSecondTemplate": "持续记录 {day_compact}",
+          "accentColor": [255, 216, 0, 245],
+          "tagTextColor": [20, 20, 20, 255],
+          "titleFill": [255, 255, 255, 255],
+          "titleOutline": [18, 18, 18, 210],
+          "titleShadow": [0, 0, 0, 78],
+          "panelAlpha": 48,
+          "titleY": 500,
+          "noteY": 1280,
+          "contrast": 1.07,
+          "color": 0.96,
+          "labelUnderlineWidth": 318
+        },
+        "v1.3": {
+          "seriesLabel": "视频日记",
+          "titleMode": "free-title",
+          "metaSecondTemplate": "持续记录 {day_compact}",
+          "accentColor": [255, 216, 0, 238],
+          "tagTextColor": [20, 20, 20, 255],
+          "titleFill": [255, 255, 255, 255],
+          "titleOutline": [12, 12, 12, 170],
+          "titleShadow": [0, 0, 0, 68],
+          "titleOutlineWidth": 3,
+          "panelAlpha": 72,
+          "titleY": 610,
+          "noteY": 1292,
+          "contrast": 1.04,
+          "color": 0.92,
+          "labelUnderlineWidth": 318,
+          "title1StartSize": 178,
+          "title2StartSize": 168,
+          "taglineSize": 48,
+          "noteSize": 38,
+          "metaSize": 44,
+          "metaBoldSize": 52,
+          "seriesSize": 78
+        },
+        "v1.3.1": {
+          "seriesLabel": "视频日记",
+          "titleMode": "free-title",
+          "metaSecondTemplate": "持续记录 {day_compact}",
+          "accentColor": [255, 216, 0, 238],
+          "tagTextColor": [20, 20, 20, 255],
+          "titleFill": [255, 255, 255, 255],
+          "titleOutline": [12, 12, 12, 160],
+          "titleShadow": [0, 0, 0, 62],
+          "titleOutlineWidth": 3,
+          "panelAlpha": 72,
+          "titleY": 610,
+          "noteY": 1292,
+          "contrast": 1.04,
+          "color": 0.92,
+          "labelUnderlineWidth": 318,
+          "title1StartSize": 190,
+          "title2StartSize": 168,
+          "titleFaceBoost": 0,
+          "taglineSize": 48,
+          "noteSize": 38,
+          "metaSize": 44,
+          "metaBoldSize": 52,
+          "seriesSize": 78
+        }
+      }
+    },
+    "suisuinian": {
+      "defaultVersion": "v0.1",
+      "aliases": ["碎碎念", "碎碎念儿", "随手记录"],
+      "versions": {
+        "v0.1": {
+          "seriesLabel": "碎碎念",
+          "titleMode": "fixed-title",
+          "fixedTitle": "碎碎念",
+          "metaSecondTemplate": "随手记录",
+          "accentColor": [159, 232, 112, 245],
+          "tagTextColor": [18, 28, 18, 255],
+          "titleFill": [255, 255, 255, 255],
+          "titleOutline": [18, 18, 18, 190],
+          "titleShadow": [0, 0, 0, 70],
+          "panelAlpha": 38,
+          "titleY": 520,
+          "noteY": 1280,
+          "contrast": 1.03,
+          "color": 0.94,
+          "labelUnderlineWidth": 250
+        }
+      }
+    },
+    "reading-note": {
+      "defaultVersion": "v0.1",
+      "aliases": ["读书笔记", "读书日记", "reading-note"],
+      "versions": {
+        "v0.1": {
+          "seriesLabel": "读书笔记",
+          "titleMode": "book-title",
+          "metaSecondTemplate": "阅读记录",
+          "accentColor": [255, 202, 78, 245],
+          "tagTextColor": [26, 22, 16, 255],
+          "titleFill": [255, 255, 255, 255],
+          "titleOutline": [16, 16, 16, 205],
+          "titleShadow": [0, 0, 0, 86],
+          "panelAlpha": 58,
+          "titleY": 500,
+          "noteY": 1280,
+          "contrast": 1.05,
+          "color": 0.90,
+          "labelUnderlineWidth": 318
+        }
+      }
+    }
+  }
+}

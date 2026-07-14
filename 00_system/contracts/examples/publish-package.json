@@ -1,0 +1,27 @@
+{
+  "runId": "2030-01-01_Day1",
+  "contentId": "2030-01-01_Day1",
+  "platform": "douyin",
+  "title": "示例发布标题",
+  "description": "示例作品描述。",
+  "chapters": [
+    {"startSeconds": 0, "time": "00:00", "title": "问题从哪里开始"},
+    {"startSeconds": 42, "time": "00:42", "title": "我的当前理解"}
+  ],
+  "artifacts": {
+    "video": "05_exports/2030-01-01/final.mp4",
+    "cover3x4": "05_exports/2030-01-01/cover_3x4.jpg",
+    "cover4x3": "05_exports/2030-01-01/cover_4x3.jpg",
+    "srt": "04_videos/2030-01-01/subtitles/final.srt"
+  },
+  "production": {
+    "videoDurationSeconds": 238.4,
+    "fileSizeBytes": 123456789,
+    "productionTotalMinutes": 36,
+    "subtitleQc": "pass",
+    "compliance": "pass",
+    "statsRecorded": true,
+    "systemVersion": "3.0.0"
+  },
+  "publishReady": true
+}

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "reading-note",
+  "displayName": "读书笔记",
+  "enabled": true,
+  "default": false,
+  "pathStrategy": "column-first",
+  "counter": {
+    "enabled": false,
+    "type": "sequence"
+  },
+  "profile": "reading-note-default"
+}

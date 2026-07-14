@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Diary Orchestrator"
+  short_description: "Route requests to diary workflow skills"
+  default_prompt: "Use $video-diary-orchestrator to decide the next step in my video diary workflow."

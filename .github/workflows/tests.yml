@@ -1,0 +1,37 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Control plane
+        run: python3 -m unittest discover -s 09_tools/tests -p 'test_*.py'
+      - name: Video edit helpers
+        run: python3 -m unittest discover -s .codex/skills/video-diary-edit/tests -p 'test_*.py'
+      - name: Daily Engineering Loop
+        run: python3 -m unittest discover -s .codex/skills/video-production-evolution/tests -p 'test_*.py'
+      - name: Registry and contracts
+        run: |
+          python3 09_tools/vp.py registry validate
+          python3 09_tools/vp.py contract validate
+      - name: JavaScript syntax
+        run: |
+          node --check 09_tools/new-day.mjs
+          node --check 09_tools/audit-workflow.mjs
+          node --check 09_tools/feishu-remote-script-worker.mjs

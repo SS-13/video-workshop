@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Diary Monthly Review"
+  short_description: "Archive month text and scan videos"
+  default_prompt: "Use $video-diary-monthly-review to run the month-end archive and video file scan."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Diary Douyin"
+  short_description: "Poll and report Douyin video metrics"
+  default_prompt: "Use $video-diary-douyin to poll and summarize my Douyin video diary metrics."

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "id": "video-diary-default",
+  "displayName": "视频日记默认流程",
+  "contentType": "video-diary",
+  "agents": {
+    "inputReview": "compliance-agent",
+    "text": "text-agent",
+    "video": "video-agent",
+    "outputReview": "compliance-agent"
+  },
+  "skills": {
+    "intake": "video-diary-intake",
+    "script": "video-diary-script",
+    "cover": "video-diary-cover",
+    "edit": "video-diary-edit",
+    "log": "video-diary-log"
+  },
+  "commands": {
+    "initialize": "new-day",
+    "render": "edit:render-day-v2",
+    "fallbackRender": "edit:render-day-legacy",
+    "promote": "edit:promote-final",
+    "publishPackage": "publish:package",
+    "finalizeRun": "run:finalize-active"
+  },
+  "quality": {
+    "subtitleSource": "real-spoken-audio",
+    "subtitleMaxLines": 2,
+    "combinedReview": true,
+    "publishPackageRequired": true,
+    "defaultBgm": false
+  },
+  "resources": {
+    "speakingStyle": {
+      "publicDefault": "00_system/defaults/speaking-style.md",
+      "localOverride": "10_skills/personal-speaking-style/SKILL.md"
+    },
+    "transcriptCorrections": {
+      "publicDefault": "00_system/defaults/transcript-corrections.tsv",
+      "localOverride": "11_templates/关键词收集/字幕纠错词库.tsv"
+    },
+    "personalizationState": "00_state/personalization.json"
+  }
+}

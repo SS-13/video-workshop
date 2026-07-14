@@ -1,0 +1,12 @@
+{
+  "id": "artifact_final_video",
+  "runId": "2030-01-01_Day1",
+  "stepId": "step_export",
+  "type": "video",
+  "label": "最终成片",
+  "mimeType": "video/mp4",
+  "relativePath": "05_exports/2030-01-01/final.mp4",
+  "available": true,
+  "sizeBytes": 123456789,
+  "durationSeconds": 238.4
+}

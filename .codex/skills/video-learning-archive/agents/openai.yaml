@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Learning Archive"
+  short_description: "Archive external videos, subtitles, and notes"
+  default_prompt: "Use $video-learning-archive to download this video link for study and create transcript and summary notes."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Diary Intake"
+  short_description: "Record raw daily ideas into inbox"
+  default_prompt: "Use $video-diary-intake to record today's raw video diary idea."

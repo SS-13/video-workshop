@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Diary Audit"
+  short_description: "Third-party workflow monitor with McKinsey diagnostic"
+  default_prompt: "Use $video-diary-audit to run a McKinsey-style third-party audit on Video Workshop and write the report to 17_reports/."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Diary Remote"
+  short_description: "Control Feishu mobile script worker"
+  default_prompt: "Use $video-diary-remote to start or stop the Feishu video diary worker."

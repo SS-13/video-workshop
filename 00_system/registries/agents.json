@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "agents": {
+    "orchestrator": {
+      "definition": ".codex/skills/video-diary-orchestrator/SKILL.md",
+      "role": "route"
+    },
+    "compliance-agent": {
+      "definition": ".codex/agents/compliance-agent.md",
+      "role": "governance"
+    },
+    "text-agent": {
+      "definition": ".codex/agents/text-agent.md",
+      "role": "text"
+    },
+    "video-agent": {
+      "definition": ".codex/agents/video-agent.md",
+      "role": "video"
+    },
+    "system-steward-agent": {
+      "definition": ".codex/agents/system-steward-agent.md",
+      "role": "evolution"
+    },
+    "release-agent": {
+      "definition": ".codex/agents/release-agent.md",
+      "role": "release-governance"
+    }
+  }
+}

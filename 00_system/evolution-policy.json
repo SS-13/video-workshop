@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 2,
+  "topK": 3,
+  "lookbackDays": 7,
+  "repeatThreshold": 2,
+  "priorityOrder": ["P0", "P1", "P2", "P3"],
+  "candidateRules": {
+    "explicitPromotionRequest": true,
+    "repeatedObservation": true,
+    "p0AlwaysEligible": true,
+    "deterministicFinding": true
+  },
+  "selection": {
+    "freezeDailyTopK": true
+  },
+  "automation": {
+    "modifyFormalRules": false,
+    "modifySkills": false,
+    "modifyHooks": false,
+    "bumpVersion": false
+  }
+}

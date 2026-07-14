@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Diary Cleanup"
+  short_description: "Audit and archive media-heavy files"
+  default_prompt: "Use $video-diary-cleanup to inspect old media and prepare cleanup reports."

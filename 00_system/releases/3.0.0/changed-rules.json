@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "release": "3.0.0",
+  "stableFallback": "2.1.0",
+  "changes": [
+    {
+      "id": "daily-topk-lock",
+      "scope": "evolution",
+      "summary": "Allow unlimited append-only observations while freezing the first daily TopK selection.",
+      "rollbackImpact": "none on media production"
+    },
+    {
+      "id": "generic-control-plane",
+      "scope": "system-core",
+      "summary": "Add content type, profile, command, agent, Run, Artifact, and PublishPackage registries and contracts.",
+      "rollbackImpact": "switch active release pointer to 2.1.0"
+    },
+    {
+      "id": "persistent-run-state",
+      "scope": "system-core",
+      "summary": "Track production stages and artifacts in 00_state/runs without changing existing media paths.",
+      "rollbackImpact": "run records can remain as historical evidence"
+    },
+    {
+      "id": "canary-adoption",
+      "scope": "release-gate",
+      "summary": "Adopt completed Stable artifacts into a 3.0 Canary metadata package without re-encoding or modifying media.",
+      "rollbackImpact": "none on Stable artifacts"
+    },
+    {
+      "id": "guarded-release-transition",
+      "scope": "release-gate",
+      "summary": "Require deterministic Canary checks and explicit user confirmation before activation.",
+      "rollbackImpact": "single release pointer rollback"
+    },
+    {
+      "id": "release-agent-ownership",
+      "scope": "agent-governance",
+      "summary": "Separate read-only Daily Engineering Loop ownership from Release and Canary write operations.",
+      "rollbackImpact": "release commands remain callable through vp"
+    },
+    {
+      "id": "active-run-finalization",
+      "scope": "system-core",
+      "summary": "After 3.x activation, finalize each publish-ready package into native Stable Run State; remain dormant on 2.x.",
+      "rollbackImpact": "2.1.0 does not execute the hook"
+    },
+    {
+      "id": "public-bootstrap",
+      "scope": "workspace-bootstrap",
+      "summary": "Initialize ignored local workspaces and expose one ordered AI context entry after a clean clone.",
+      "rollbackImpact": "none on existing local content"
+    },
+    {
+      "id": "local-personalization-layer",
+      "scope": "text-and-subtitle-defaults",
+      "summary": "Keep public defaults in Git while personal speaking style and vocabulary remain optional local overrides.",
+      "rollbackImpact": "public defaults remain usable"
+    }
+  ]
+}

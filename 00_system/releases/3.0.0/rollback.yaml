@@ -1,0 +1,18 @@
+schemaVersion: 1
+release: 3.0.0
+fallbackRelease: 2.1.0
+strategy: switch-active-release-pointer
+command: python3 09_tools/vp.py release rollback --confirm --actor user
+mediaPolicy:
+  deleteCandidateMedia: false
+  overwriteStableMedia: false
+  migrateMedia: false
+statePolicy:
+  retainFailedRun: true
+  retainCanaryEvidence: true
+  retainObservations: true
+verification:
+  - package.json.version equals 2.1.0
+  - 00_system/system.json activeRelease equals 2.1.0
+  - edit:render-day-v2 remains available
+  - edit:render-day-legacy remains available

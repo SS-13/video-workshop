@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "suisuinian",
+  "displayName": "碎碎念",
+  "enabled": true,
+  "default": false,
+  "pathStrategy": "column-first",
+  "counter": {
+    "enabled": false,
+    "type": "sequence"
+  },
+  "profile": "suisuinian-default"
+}

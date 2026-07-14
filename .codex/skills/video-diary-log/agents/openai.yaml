@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Diary Log"
+  short_description: "Record time, token, and publish logs"
+  default_prompt: "Use $video-diary-log to record today's video diary cost and publish status."

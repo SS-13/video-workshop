@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "stableRelease": "2.1.0",
+  "candidateRelease": "3.0.0",
+  "targetDate": null,
+  "dailyPlanning": {
+    "topK": 3,
+    "morningPlanTime": "09:00",
+    "dailyReportTime": "23:30",
+    "newRequirementsMode": "observation-first"
+  },
+  "productionGuard": {
+    "stableChannelAlwaysAvailable": true,
+    "candidateChangesDuringProduction": false,
+    "renameRootBeforeCanary": false,
+    "deleteLegacyChannel": false,
+    "automaticCutover": false
+  },
+  "rollback": {
+    "release": "2.1.0",
+    "editEngine": "legacy",
+    "strategy": "switch-active-release-pointer"
+  }
+}

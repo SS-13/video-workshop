@@ -45,6 +45,7 @@
     "cover:render-pencil-html": "node .codex/skills/video-diary-cover/scripts/render-pencil-html.mjs",
     "cover:export-pencil": "node .codex/skills/video-diary-cover/scripts/export-pencil-cover.mjs",
     "cover:gallery": "node .codex/skills/video-diary-cover/scripts/build-gallery-index.mjs",
+    "cover": "python3 09_tools/vp.py cover",
     "video:add-pip": "python3 .codex/skills/video-diary-edit/scripts/add-picture-in-picture.py",
     "add-bgm": "node .codex/skills/video-diary-edit/scripts/add-bgm.mjs",
     "douyin:login": "node 09_tools/douyin-poll.mjs login",

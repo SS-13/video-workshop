@@ -5,6 +5,9 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
+
+from PIL import Image
 
 
 TOOLS_DIR = Path(__file__).resolve().parents[1]
@@ -57,6 +60,12 @@ from video_production_core.run_store import (  # noqa: E402
 from video_production_core.canary_validation import validate_real_canary  # noqa: E402
 from video_production_core.canary_adoption import adopt_canary_run  # noqa: E402
 from video_production_core.active_finalization import finalize_active_run  # noqa: E402
+from video_production_core.cover_workflow import (  # noqa: E402
+  CoverWorkflowError,
+  list_cover_history,
+  make_cover_pair,
+  register_pencil_design,
+)
 
 
 class ProjectRootTest(unittest.TestCase):
@@ -189,6 +198,173 @@ class WorkspaceBootstrapTest(unittest.TestCase):
       self.assertEqual(context["publicReadOrder"][0], "AGENTS.md")
       self.assertEqual(context["personalization"]["status"], "pending")
       self.assertIn("01_inbox/sample.md", context["personalization"]["sourceFiles"])
+
+
+class CoverWorkflowTest(unittest.TestCase):
+  def make_root(self, root):
+    routes_path = root / ".codex" / "skills" / "video-diary-cover" / "references"
+    routes_path.mkdir(parents=True)
+    (routes_path / "cover-routes.json").write_text(
+      json.dumps({
+        "defaultRoute": "video-diary",
+        "routes": {
+          "video-diary": {
+            "defaultVersion": "v1.0",
+            "aliases": ["视频日记"],
+            "versions": {
+              "v1.0": {"seriesLabel": "视频日记", "titleMode": "free-title"},
+            },
+          },
+        },
+      }, ensure_ascii=False, indent=2) + "\n",
+      encoding="utf-8",
+    )
+
+  def make_image(self, path, size):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", size, (38, 42, 48)).save(path)
+
+  def test_pencil_design_registration_is_versioned_and_immutable(self):
+    with tempfile.TemporaryDirectory() as directory:
+      root = Path(directory)
+      self.make_root(root)
+      source = root / "design.pen"
+      source.write_text("pencil design\n", encoding="utf-8")
+      preview_3x4 = root / "preview-3x4.png"
+      preview_4x3 = root / "preview-4x3.png"
+      self.make_image(preview_3x4, (1080, 1440))
+      self.make_image(preview_4x3, (1440, 1080))
+      tokens = root / "tokens.json"
+      tokens.write_text(
+        json.dumps({"seriesLabel": "视频日记", "titleMode": "free-title"}) + "\n",
+        encoding="utf-8",
+      )
+      invalid_preview = root / "invalid-preview.png"
+      self.make_image(invalid_preview, (1000, 1000))
+
+      with self.assertRaises(CoverWorkflowError):
+        register_pencil_design(
+          root=root,
+          route="video-diary",
+          version="v1.1",
+          pencil_source=source,
+          preview_3x4=invalid_preview,
+          preview_4x3=preview_4x3,
+          tokens=tokens,
+        )
+
+      result = register_pencil_design(
+        root=root,
+        route="video-diary",
+        version="v1.1",
+        pencil_source=source,
+        preview_3x4=preview_3x4,
+        preview_4x3=preview_4x3,
+        tokens=tokens,
+        activate=True,
+        note="Pencil layout approved",
+      )
+
+      self.assertTrue(result["active"])
+      self.assertTrue((root / result["manifest"]).is_file())
+      routes = json.loads(
+        (root / ".codex/skills/video-diary-cover/references/cover-routes.json").read_text(
+          encoding="utf-8"
+        )
+      )
+      self.assertEqual(routes["routes"]["video-diary"]["defaultVersion"], "v1.1")
+      self.assertIn("v1.1", routes["routes"]["video-diary"]["versions"])
+
+      with self.assertRaises(CoverWorkflowError):
+        register_pencil_design(
+          root=root,
+          route="video-diary",
+          version="v1.1",
+          pencil_source=source,
+          preview_3x4=preview_3x4,
+          preview_4x3=preview_4x3,
+          tokens=tokens,
+        )
+
+  def test_cover_history_distinguishes_pencil_and_renderer_versions(self):
+    with tempfile.TemporaryDirectory() as directory:
+      root = Path(directory)
+      self.make_root(root)
+      manifest_path = (
+        root / "15_cover_gallery/designs/video-diary/v1.0/manifest.json"
+      )
+      manifest_path.parent.mkdir(parents=True)
+      manifest_path.write_text(
+        json.dumps({
+          "createdAt": "2026-07-14T10:00:00+08:00",
+          "note": "Original Pencil style",
+        }) + "\n",
+        encoding="utf-8",
+      )
+      date_index = root / "15_cover_gallery/2026-07-14/INDEX.md"
+      date_index.parent.mkdir(parents=True)
+      date_index.write_text(
+        "| version | file | route | style_version | title | note |\n"
+        "| --- | --- | --- | --- | --- | --- |\n"
+        "| v01 | cover.jpg | video-diary | v1.0 | Test title | 3x4 |\n",
+        encoding="utf-8",
+      )
+
+      result = list_cover_history(root, route="video-diary", limit=5)
+
+      self.assertEqual(result["styleVersions"][0]["origin"], "pencil")
+      self.assertEqual(result["dailyRevisions"][0]["version"], "v01")
+
+  def test_cover_make_uses_one_command_and_archives_both_aspects(self):
+    with tempfile.TemporaryDirectory() as directory:
+      root = Path(directory)
+      self.make_root(root)
+      portrait = root / "portrait.jpg"
+      landscape = root / "landscape.jpg"
+      self.make_image(portrait, (1080, 1440))
+      self.make_image(landscape, (1440, 1080))
+      calls = []
+      archive_count = 0
+
+      def fake_run(command, command_root):
+        nonlocal archive_count
+        calls.append(command)
+        script = Path(command[1]).name
+        if script == "render-cover-pair.py":
+          prefix = Path(command[command.index("--output-prefix") + 1])
+          self.make_image(prefix.parent / f"{prefix.name}_3x4.jpg", (1080, 1440))
+          self.make_image(prefix.parent / f"{prefix.name}_4x3.jpg", (1440, 1080))
+          manifest = (
+            command_root / "04_videos/2026-07-14/cover-qc"
+            / f"{prefix.name}_pair_manifest.json"
+          )
+          manifest.parent.mkdir(parents=True, exist_ok=True)
+          manifest.write_text("{}\n", encoding="utf-8")
+          stdout = "qc=pass\n"
+        elif script == "archive-cover.mjs":
+          archive_count += 1
+          stdout = f"cover=15_cover_gallery/2026-07-14/v0{archive_count}_cover.jpg\n"
+        else:
+          stdout = "gallery=15_cover_gallery/INDEX.md\n"
+        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
+
+      with patch(
+        "video_production_core.cover_workflow.run_command",
+        side_effect=fake_run,
+      ):
+        result = make_cover_pair(
+          root=root,
+          date="2026-07-14",
+          portrait=portrait,
+          landscape=landscape,
+          day_label="Day 42",
+          title="Test title",
+        )
+
+      self.assertEqual(len(calls), 4)
+      self.assertEqual(result["styleVersion"], "v1.0")
+      self.assertTrue(result["archived"]["3x4"].endswith("v01_cover.jpg"))
+      self.assertTrue(result["archived"]["4x3"].endswith("v02_cover.jpg"))
 
 
 class ControlPlaneRegistryTest(unittest.TestCase):

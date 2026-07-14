@@ -13,7 +13,8 @@
     "release pointer and rollback",
     "shadow regression and one real canary",
     "clean-clone workspace bootstrap",
-    "public defaults with ignored local personalization"
+    "public defaults with ignored local personalization",
+    "Pencil cover version control through one compact CLI"
   ],
   "outOfScope": [
     "ClipFlow-AI HTTP API",
@@ -46,20 +47,21 @@
     "manualActivation": "pass",
     "cleanCloneBootstrap": "pass",
     "completePrivateWorkspaceBootstrap": "pass",
+    "coverControlPlane": "pass",
     "privacyBoundary": "pass",
     "coverPairSmoke": "pass"
   },
   "evidence": {
     "testCounts": {
-      "controlPlane": 37,
+      "controlPlane": 40,
       "editing": 8,
       "evolution": 11,
-      "total": 56
+      "total": 59
     },
     "registry": {
       "contentTypes": 3,
       "profiles": 3,
-      "commands": 58,
+      "commands": 59,
       "agents": 6
     },
     "canaryCommand": "python3 09_tools/vp.py release canary-check --run-id <RUN_ID>",

@@ -2,16 +2,16 @@
 
 ## Automated Tests
 
-- Control Plane: `37 passed`
+- Control Plane: `40 passed`
 - Video Edit: `8 passed`
 - Daily Engineering Loop: `11 passed`
-- Total: `56 passed`
+- Total: `59 passed`
 
 ## Registry And Contracts
 
 - Content types: `3`
 - Profiles: `3`
-- Commands: `58`
+- Commands: `59`
 - Agents: `6`
 - Registry errors: `0`
 - Run / Artifact / PublishPackage contracts: pass
@@ -43,6 +43,10 @@ and that a second initialization preserves locally edited seed files.
 - Synthetic 3:4 and 4:3 cover renders passed QC at `1080x1440` and `1440x1080`.
 - Cover export uses the current Node executable or `NODE_BIN`, not a user home
   path.
+- Pencil style registration is immutable, validates both preview ratios, and
+  keeps source assets in ignored local history.
+- `vp cover make` delegates to the existing renderer and automatically archives
+  both cover aspects without removing compatibility commands.
 - Public files contain no absolute home-directory dependency.
 
 ## Media And Release Gates

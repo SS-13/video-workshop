@@ -43,6 +43,7 @@
     "cover:render-pencil-html": {"owner": "video-diary-cover", "command": "node .codex/skills/video-diary-cover/scripts/render-pencil-html.mjs"},
     "cover:export-pencil": {"owner": "video-diary-cover", "command": "node .codex/skills/video-diary-cover/scripts/export-pencil-cover.mjs"},
     "cover:gallery": {"owner": "video-diary-cover", "command": "node .codex/skills/video-diary-cover/scripts/build-gallery-index.mjs"},
+    "cover": {"owner": "video-diary-cover", "command": "python3 09_tools/vp.py cover"},
     "video:add-pip": {"owner": "video-diary-edit", "command": "python3 .codex/skills/video-diary-edit/scripts/add-picture-in-picture.py"},
     "add-bgm": {"owner": "video-diary-edit", "command": "node .codex/skills/video-diary-edit/scripts/add-bgm.mjs"},
     "douyin:login": {"owner": "video-diary-douyin", "command": "node 09_tools/douyin-poll.mjs login"},

@@ -70,9 +70,12 @@ Rules:
 
 ### Lane A: Cover
 
-Generate the locked 3:4 and 4:3 pair from one title/subtitle/design version.
-Run font, clipping, safe-area, dimension, and consistency checks. Archive local
-revisions without publishing them to Git.
+Use Pencil only when designing a new visual style, then register that approved
+style as an immutable version with `vp cover design`. For daily production,
+use `vp cover make` to generate the locked 3:4 and 4:3 pair from one
+title/subtitle/style version. Run font, clipping, safe-area, dimension, and
+consistency checks, then archive both local revisions automatically. Use
+`vp cover history` to inspect style versions and recent revisions.
 
 ### Lane B: Subtitle
 

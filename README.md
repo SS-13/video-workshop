@@ -239,6 +239,31 @@ Fallback:
 npm run edit:render-day-legacy -- --date YYYY-MM-DD --mode standard
 ```
 
+## Cover Design System
+
+Cover design stays inside the existing `video-diary-cover` Skill. Pencil is
+used only when the visual system changes; approved styles become immutable
+versions that the fast daily renderer can reuse.
+
+The public CLI has three cover actions:
+
+```bash
+# Register an approved Pencil design and its 3:4 / 4:3 previews
+npm run cover -- design --help
+
+# Generate, QC, lock, and archive today's cover pair
+npm run cover -- make --help
+
+# Inspect style versions and recent daily revisions
+npm run cover -- history --route video-diary
+```
+
+Pencil sources and personal preview assets remain under ignored local cover
+history. Renderer tokens live in the versioned route configuration. Existing
+low-level render, HTML-export, archive, and gallery scripts remain available as
+compatibility internals, so the daily workflow only needs the three actions
+above.
+
 ## Local Personalization
 
 `npm run setup` creates the complete ignored local workspace, including

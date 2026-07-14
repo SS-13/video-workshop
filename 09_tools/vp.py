@@ -46,6 +46,12 @@ from video_production_core.workspace_bootstrap import (  # noqa: E402
 from video_production_core.canary_validation import validate_real_canary  # noqa: E402
 from video_production_core.canary_adoption import adopt_canary_run  # noqa: E402
 from video_production_core.active_finalization import finalize_active_run  # noqa: E402
+from video_production_core.cover_workflow import (  # noqa: E402
+  CoverWorkflowError,
+  list_cover_history,
+  make_cover_pair,
+  register_pencil_design,
+)
 from video_production_core.run_store import (  # noqa: E402
   RunStateError,
   advance_run,
@@ -175,6 +181,48 @@ def build_parser() -> argparse.ArgumentParser:
   profile_get = profile_subparsers.add_parser("get", help="Get one workflow profile")
   profile_get.add_argument("profile_id")
   add_common_json_flag(profile_get)
+
+  cover = subparsers.add_parser("cover", help="Design, make, and inspect versioned covers")
+  cover_subparsers = cover.add_subparsers(dest="cover_action", required=True)
+
+  cover_design = cover_subparsers.add_parser(
+    "design",
+    help="Register one immutable Pencil style version",
+  )
+  cover_design.add_argument("--route", default="video-diary")
+  cover_design.add_argument("--version", required=True)
+  cover_design.add_argument("--pencil-source", required=True)
+  cover_design.add_argument("--preview-3x4", required=True)
+  cover_design.add_argument("--preview-4x3", required=True)
+  cover_design.add_argument("--tokens")
+  cover_design.add_argument("--activate", action="store_true")
+  cover_design.add_argument("--note", default="")
+  add_common_json_flag(cover_design)
+
+  cover_make = cover_subparsers.add_parser(
+    "make",
+    help="Render and archive one approved daily cover pair",
+  )
+  cover_make.add_argument("--date", required=True)
+  cover_make.add_argument("--route", default="video-diary")
+  cover_make.add_argument("--version", default="")
+  cover_make.add_argument("--day-label", default="")
+  cover_make.add_argument("--portrait", required=True)
+  cover_make.add_argument("--landscape")
+  cover_make.add_argument("--output-prefix")
+  cover_make.add_argument("--title", default="")
+  cover_make.add_argument("--book-title", default="")
+  cover_make.add_argument("--subtitle", default="")
+  cover_make.add_argument("--note", default="")
+  add_common_json_flag(cover_make)
+
+  cover_history = cover_subparsers.add_parser(
+    "history",
+    help="List style versions and recent daily cover revisions",
+  )
+  cover_history.add_argument("--route", default="")
+  cover_history.add_argument("--limit", type=int, default=20)
+  add_common_json_flag(cover_history)
 
   release = subparsers.add_parser("release", help="Inspect release channels")
   release_subparsers = release.add_subparsers(dest="release_action", required=True)
@@ -501,6 +549,76 @@ def handle_profile(root: Path, args: argparse.Namespace) -> int:
     print(f"render={data['commands']['render']}")
     print(f"fallback_render={data['commands']['fallbackRender']}")
   return 0
+
+
+def handle_cover(root: Path, args: argparse.Namespace) -> int:
+  if args.cover_action == "design":
+    data = register_pencil_design(
+      root=root,
+      route=args.route,
+      version=args.version,
+      pencil_source=args.pencil_source,
+      preview_3x4=args.preview_3x4,
+      preview_4x3=args.preview_4x3,
+      tokens=args.tokens,
+      activate=args.activate,
+      note=args.note,
+    )
+    if args.json:
+      print_json(json_envelope(root, data))
+    else:
+      print(f"route={data['route']}")
+      print(f"style_version={data['styleVersion']}")
+      print(f"active={str(data['active']).lower()}")
+      print(f"manifest={data['manifest']}")
+      print(f"token_hash={data['tokenHash']}")
+    return 0
+
+  if args.cover_action == "make":
+    data = make_cover_pair(
+      root=root,
+      date=args.date,
+      portrait=args.portrait,
+      landscape=args.landscape,
+      route=args.route,
+      version=args.version,
+      day_label=args.day_label,
+      title=args.title,
+      book_title=args.book_title,
+      subtitle=args.subtitle,
+      note=args.note,
+      output_prefix=args.output_prefix,
+    )
+    if args.json:
+      print_json(json_envelope(root, data))
+    else:
+      print(f"route={data['route']}")
+      print(f"style_version={data['styleVersion']}")
+      print(f"cover_3x4={data['covers']['3x4']}")
+      print(f"cover_4x3={data['covers']['4x3']}")
+      print(f"manifest={data['pairManifest']}")
+      print(f"gallery={data['gallery']}")
+    return 0
+
+  if args.cover_action == "history":
+    data = list_cover_history(root, route=args.route, limit=args.limit)
+    if args.json:
+      print_json(json_envelope(root, data))
+    else:
+      print(f"route={data['route']}")
+      for item in data["styleVersions"]:
+        print(
+          f"style={item['route']}/{item['styleVersion']}\t"
+          f"default={str(item['default']).lower()}\torigin={item['origin']}"
+        )
+      for item in data["dailyRevisions"]:
+        print(
+          f"revision={item['date']}/{item['version']}\t"
+          f"style={item['styleVersion']}\ttitle={item['title']}"
+        )
+    return 0
+
+  raise CoverWorkflowError(f"Unknown cover action: {args.cover_action}")
 
 
 def handle_release(root: Path, args: argparse.Namespace) -> int:
@@ -883,6 +1001,8 @@ def main(argv: Optional[list] = None) -> int:
       return handle_content_type(root, args)
     if args.command == "profile" and args.profile_action == "get":
       return handle_profile(root, args)
+    if args.command == "cover":
+      return handle_cover(root, args)
     if args.command == "release" and args.release_action == "status":
       return handle_release(root, args)
     if args.command == "release" and args.release_action == "transcript-check":
@@ -934,6 +1054,10 @@ def main(argv: Optional[list] = None) -> int:
     return 3
   except RunStateError as error:
     payload = error_envelope("RUN_STATE_ERROR", str(error))
+    print_json(payload)
+    return 3
+  except CoverWorkflowError as error:
+    payload = error_envelope("COVER_WORKFLOW_ERROR", str(error))
     print_json(payload)
     return 3
   except (EvolutionError, RootDiscoveryError, OSError, json.JSONDecodeError) as error:

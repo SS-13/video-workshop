@@ -56,6 +56,12 @@
       "scope": "text-and-subtitle-defaults",
       "summary": "Keep public defaults in Git while personal speaking style and vocabulary remain optional local overrides.",
       "rollbackImpact": "public defaults remain usable"
+    },
+    {
+      "id": "cover-control-plane",
+      "scope": "cover-system",
+      "summary": "Keep one Cover Skill and expose only design, make, and history actions for Pencil style versions and daily cover production.",
+      "rollbackImpact": "existing low-level cover commands remain available"
     }
   ]
 }

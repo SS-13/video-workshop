@@ -22,7 +22,7 @@ Ignored workspace
   06_logs/          production logs
   10_skills/        personal speaking style
   11_templates/关键词收集/  private vocabulary
-  15_cover_gallery/ generated cover history
+  15_cover_gallery/ Pencil design versions + generated cover history
   17_reports/       local evolution and release reports
 ```
 
@@ -44,6 +44,14 @@ raw idea
   -> completion notice
   -> production issue triage
      -> confirmed fixes enter the next Engineering Loop
+```
+
+Cover has its own compact control plane:
+
+```text
+Pencil style design -> vp cover design -> immutable style version
+daily sources       -> vp cover make   -> pair + QC + archive
+version inspection  -> vp cover history
 ```
 
 ## Artifacts

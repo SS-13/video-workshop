@@ -61,5 +61,7 @@ Use this file to decide which cover route to render. Keep `SKILL.md` thin; updat
 ## Update Rule
 
 - 新增栏目路线：先在 `cover-routes.json` 新增 route，再在本文件补说明。
-- 版本演进：保留旧版本配置，新增 `v0.2` / `v1.3`，不要直接覆盖已有版本。
+- 风格设计：先在 Pencil 完成 3:4 / 4:3 双画布和截图核验，再用
+  `vp cover design` 登记 Pencil 源文件、预览图和 renderer tokens。
+- 版本演进：保留旧版本配置，新增 `v0.2` / `v1.4.0`，不要直接覆盖已有版本。
 - 渲染脚本参数应保持通用，不为某一天写死日期、标题或 Day。

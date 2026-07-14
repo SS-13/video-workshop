@@ -30,6 +30,17 @@
         "00_system/releases/<candidate>/manifest.json",
         "17_reports/releases/<candidate>"
       ]
+    },
+    "cover-system": {
+      "agent": "video-agent",
+      "skill": "video-diary-cover",
+      "commands": ["vp cover design", "vp cover make", "vp cover history"],
+      "writeScope": [
+        ".codex/skills/video-diary-cover/references/cover-routes.json",
+        "04_videos/<date>/cover-qc",
+        "05_exports/<date>",
+        "15_cover_gallery"
+      ]
     }
   }
 }

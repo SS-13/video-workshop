@@ -1,5 +1,9 @@
 # Start Here
 
+An AI Agent must complete the dependency installation and user configuration
+checkpoint in `README.md` before running initialization. Do not begin with a
+partial media toolchain: `npm run edit:deps` must report `SUMMARY ok`.
+
 ## 1. Initialize a Clone
 
 ```bash

@@ -19,16 +19,184 @@ media stay on the local machine.
 - Observation -> TopK -> Daily Engineering Loop;
 - stable v2 production with a preserved legacy fallback.
 
-## Quick Start
+## AI Agent Bootstrap Contract
+
+An AI Agent setting up this repository owns the bootstrap end to end. It should
+detect the host environment, install only missing dependencies, verify them,
+ask the user for the initial workflow choices, and initialize the workspace.
+Do not ask the user to create ignored directories by hand.
+
+Do not start content production until both dependency and workspace readiness
+gates below pass. Follow the host's approval rules before installing system
+packages, downloading a transcription model, or using administrator access.
+
+### 1. Required Dependencies
+
+| Dependency | Minimum | Purpose |
+| --- | --- | --- |
+| Git | current supported release | clone, updates, rollback |
+| Python | 3.10+ | control plane, cover and subtitle tools |
+| Node.js + npm | Node 20+ | project commands and JavaScript helpers |
+| FFmpeg + FFprobe | build with `ass`, `subtitles`, and `drawtext` filters | audio extraction, subtitles, final render |
+| Pillow | version from `requirements.txt` | cover rendering |
+| CJK font | one readable Chinese font | Chinese covers and subtitles |
+| Local speech-to-text | `whisper.cpp` plus a GGML model, or OpenAI Whisper | real-audio transcription and timing |
+
+Recommended transcription route: `whisper.cpp` with `ggml-base.bin`. OpenAI
+Whisper is the supported fallback. Git, Python, Node, FFmpeg, a CJK font, and
+one transcription route are required before the first real video.
+
+### 2. Detect and Install Missing Tools
+
+Inspect first:
+
+```bash
+git --version
+python3 --version
+node --version
+npm --version
+ffmpeg -version
+ffprobe -version
+whisper-cli --help
+whisper --help
+```
+
+Install only what is missing. Typical macOS commands are:
+
+```bash
+brew install git python node ffmpeg whisper-cpp
+```
+
+Typical Debian/Ubuntu commands are:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git python3 python3-pip nodejs npm ffmpeg fonts-noto-cjk
+```
+
+Use an official Node installer or version manager when the Linux package
+manager provides Node older than version 20. Typical Windows PowerShell
+commands are:
+
+```powershell
+winget install --id Git.Git -e
+winget install --id Python.Python.3.12 -e
+winget install --id OpenJS.NodeJS.LTS -e
+winget install --id Gyan.FFmpeg -e
+```
+
+On Windows, verify that `python3` resolves to Python 3.10 or newer because the
+current npm scripts invoke that command name.
+
+For the recommended `whisper.cpp` route on macOS/Linux, install the base model
+at the default path:
+
+```bash
+mkdir -p "$HOME/.cache/whisper.cpp"
+curl -L \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin \
+  -o "$HOME/.cache/whisper.cpp/ggml-base.bin"
+```
+
+When `whisper.cpp` is unavailable, install the fallback instead:
+
+```bash
+python3 -m pip install -U openai-whisper
+```
+
+Then clone the repository and install its Python dependencies:
 
 ```bash
 git clone https://github.com/SS-13/video-workshop.git
 cd video-workshop
 python3 -m pip install -r requirements.txt
-npm run setup
-npm run context
-npm run doctor
 ```
+
+Run the deterministic media dependency gate:
+
+```bash
+npm run edit:deps
+```
+
+The gate must finish with `SUMMARY ok`. If it reports a missing FFmpeg filter,
+transcription binary, or model, the Agent resolves that item and reruns the
+check before continuing. CJK font readiness is checked by `npm run doctor`
+after initialization.
+
+### 3. User Configuration Checkpoint
+
+Before initialization, the Agent asks the user to confirm:
+
+1. content type: `video-diary` by default, or another registered type shown by
+   `python3 09_tools/vp.py content-type list`;
+2. publishing preset: the current built-in preset is Douyin;
+3. cover outputs: the current built-in pair is `3:4` and `4:3`;
+4. video-diary Day baseline: start at Day 1 or import an existing Day number;
+5. personalization: use public defaults now, or learn from user-approved local
+   Inbox, Script, and Log history after initialization.
+
+The Agent reports the selected values back and waits for confirmation before
+running setup.
+
+Only offer values the installed renderer supports. If the user requests a
+different platform or cover ratio, retain it as an adapter requirement and do
+not claim the default renderer can already produce it.
+
+### 4. Initialize and Verify
+
+After the user confirms the setup choices:
+
+```bash
+npm run setup
+npm run doctor
+npm run context
+```
+
+`setup` creates every required ignored directory and local seed file without
+overwriting existing content. The readiness gate is:
+
+```text
+valid=true
+ready_for_content=true
+ready_for_render=true
+loop_ready=true
+```
+
+The Agent fixes any failed required check before proceeding. Optional local
+history may then be distilled according to the personalization protocol shown
+by `npm run context`.
+
+### 5. Start the First Idea and Recording
+
+Initialize the date, using the Day baseline confirmed above:
+
+```bash
+npm run new-day -- YYYY-MM-DD
+# Existing series only:
+npm run new-day -- YYYY-MM-DD --day 42
+```
+
+The user can now send a raw idea. The Agent preserves it in `01_inbox/`, runs
+input compliance review, and writes the recording script to `02_scripts/` when
+asked. After the user places the real recording in
+`03_recordings/YYYY-MM-DD/`, transcription can start directly:
+
+```bash
+npm run subtitle:transcribe -- \
+  --date YYYY-MM-DD \
+  --engine auto \
+  --model base \
+  --word-timestamps
+```
+
+For the normal video-diary route, the Agent can build the cover and corrected
+external SRT review pack together:
+
+```bash
+npm run edit:render-day-v2 -- --date YYYY-MM-DD --model base --stop-after-review
+```
+
+The recording is subtitle truth. The script is context only.
 
 Then tell the local AI:
 
@@ -37,9 +205,6 @@ Read AGENTS.md and the files reported by npm run context. If local historical
 content exists, personalize the ignored local profile without changing source
 files. Then prepare today's video-diary workspace.
 ```
-
-The first new video diary starts at `Day 1`. Set a different baseline with
-`VIDEO_DIARY_START_DAY` or `npm run new-day -- YYYY-MM-DD --day N`.
 
 ## Daily Flow
 
@@ -103,20 +268,12 @@ python3 09_tools/vp.py evolve --date YYYY-MM-DD
 All observations are retained. At most three enter the first locked TopK for a
 day. The Loop proposes candidates; it does not silently rewrite the system.
 
-## Requirements
+## Optional Integrations
 
-- Python 3.10+
-- Node.js 20 (see `.nvmrc`)
-- FFmpeg and FFprobe for rendering
-- Pillow for cover rendering
-- a CJK font; set `VIDEO_WORKSHOP_FONT` when no supported system font exists
-- whisper.cpp or OpenAI Whisper for transcription
-
-`npm run doctor` separates required control-plane failures from optional render
-dependency warnings.
-
-Optional tool and Feishu overrides are documented in `.env.example`. Keep the
-real `.env` local; it is ignored by Git.
+Optional rendering paths, Feishu intake, Douyin metrics, Chrome, and local tool
+overrides are documented in `.env.example`. Set `VIDEO_WORKSHOP_FONT` when no
+supported system CJK font is available. Keep the real `.env` local; it is
+ignored by Git.
 
 ## Documentation
 

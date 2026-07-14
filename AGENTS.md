@@ -7,13 +7,16 @@ Git.
 
 ## First Run
 
-1. Run `npm run setup`.
-2. Run `npm run context`.
-3. Read the reported `publicReadOrder` in order.
-4. If `personalization_status=pending` and the user has approved historical
+1. Follow `README.md` -> `AI Agent Bootstrap Contract`: detect, install, and
+   verify every required dependency.
+2. Stop at the user configuration checkpoint and confirm content type,
+   platform/cover preset, Day baseline, and personalization choice.
+3. Run `npm run setup`.
+4. Run `npm run doctor` and require content/render readiness.
+5. Run `npm run context` and read the reported `publicReadOrder` in order.
+6. If `personalization_status=pending` and the user has approved historical
    content, follow the reported personalization protocol. Read every reported
    source file, keep it unchanged, and write only the local override files.
-5. Run `npm run doctor` before starting production.
 
 Do not require personalization before the first video. The public default style
 is the fallback.

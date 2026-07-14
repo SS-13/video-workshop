@@ -161,7 +161,24 @@ Generate from the corrected real-audio transcript:
 Record the run in `00_state/production-stats.csv` on the same day. Completion is
 not reached until the user receives the publish copy and production result.
 
-## Stage 8: Evolution
+## Stage 8: Production Issues And Evolution
+
+When a production blocker appears, record it immediately as an Observation with
+the stage, impact, evidence, temporary workaround, and content ID. Keep the
+current video on the stable path; use the preserved fallback instead of changing
+production code mid-run.
+
+After the video and publish package are complete:
+
+1. classify the blocker as transient environment, source/input, operator, or
+   reproducible system defect;
+2. leave uncertain items as `needs-evidence`;
+3. add evidence and promote confirmed system defects;
+4. run the next Daily Engineering Loop only after production locks are gone;
+5. keep an already locked TopK unchanged unless a P0 issue blocks Stable.
+
+The daily evolution report generates one local `生产问题清单` from these
+Observations. It is a view, not a duplicate issue ledger.
 
 Every reusable correction may become an Observation:
 

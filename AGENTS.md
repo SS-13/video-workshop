@@ -119,6 +119,17 @@ Rules:
   Skills, Agents, Rules, Hooks, production scripts, or release versions.
 - Do not run the Loop while a production lock is active.
 
+### Production blockers
+
+- Record every meaningful production blocker as an Observation with stage,
+  impact, evidence, workaround, and content ID.
+- Do not patch Stable production code during the active video run.
+- Finish through cache, conservative workaround, or legacy fallback when safe.
+- After export, triage the issue. Promote only reproducible system defects into
+  the next Engineering Loop.
+- The generated `生产问题清单` is local. Never publish raw production details to
+  GitHub automatically.
+
 ## Release Safety
 
 - Keep daily production available while changing the system.

@@ -52,8 +52,8 @@
     "testCounts": {
       "controlPlane": 36,
       "editing": 8,
-      "evolution": 10,
-      "total": 54
+      "evolution": 11,
+      "total": 55
     },
     "registry": {
       "contentTypes": 3,

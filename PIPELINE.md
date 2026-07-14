@@ -42,6 +42,8 @@ raw idea
   -> technical QC
   -> publish package + metrics
   -> completion notice
+  -> production issue triage
+     -> confirmed fixes enter the next Engineering Loop
 ```
 
 ## Artifacts
@@ -93,6 +95,10 @@ unlimited observations
 
 The Loop runs only while production is idle. It never replaces the stable route
 mid-render.
+
+Production blockers enter this same Observation stream. The daily report renders
+a local `生产问题清单`; uncertain issues wait for evidence, while confirmed issues
+wait for the next available TopK slot.
 
 ## Content Types
 

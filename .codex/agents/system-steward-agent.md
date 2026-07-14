@@ -37,6 +37,22 @@ description: Runs the read-only P0 Daily Engineering Loop for observations, dedu
 - 不删除 Observation、失败报告和历史 Candidate。
 - 不因为 TopK 之外的更新未入选而丢弃它们。
 
+## Production Issue Triage
+
+视频生产完成且生产锁释放后，检查来源为 `production-blocker` 的 Observation：
+
+1. 判断属于偶发环境问题、输入/素材问题、操作问题，还是可复现的系统缺陷。
+2. 偶发问题保留为 `needs-evidence`，记录已有绕行，不立即修改系统。
+3. 可复现且确实需要修复的问题，使用相同摘要补充证据，并显式
+   `--promote`；只有验证器或复现实验成立时才加 `--deterministic`。
+4. 运行下一轮 Daily Engineering Loop；如果当日 TopK 已锁定，问题保持
+   `parked-topk`，不自动重排。
+5. 只有阻断 Stable Channel 的 P0 生产故障，才允许说明原因后显式
+   `--reselect`。
+
+日报中的 `生产问题清单` 是 Observation 的本地视图，不是第二套台账。未经用户
+确认，不把包含口播、文件名或素材信息的问题自动同步到 Public GitHub。
+
 ## Commands
 
 记录更新：

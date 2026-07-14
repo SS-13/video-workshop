@@ -143,6 +143,37 @@ class EvolutionLoopTest(unittest.TestCase):
     self.assertEqual(result["topK"], [])
     self.assertEqual(result["backlog"][0]["status"], "needs-evidence")
 
+  def test_report_contains_local_production_issue_list(self):
+    target = "2026-07-13"
+    self.append_observations(target, [
+      {
+        "summary": "字幕渲染首次超时",
+        "category": "performance",
+        "affectedComponent": "subtitle-render",
+      },
+      {
+        "summary": "封面字体加载失败",
+        "category": "bug",
+        "affectedComponent": "cover-font",
+        "promoteRequested": True,
+      },
+      {
+        "summary": "调整开场文案",
+        "category": "content-rule",
+        "promoteRequested": True,
+      },
+    ])
+
+    result = run_evolution(self.root, target)
+    report = (self.root / result["reportPath"]).read_text(encoding="utf-8")
+
+    self.assertIn("## 生产问题清单", report)
+    self.assertIn("字幕渲染首次超时", report)
+    self.assertIn("待复现/判断", report)
+    self.assertIn("封面字体加载失败", report)
+    issue_section = report.split("## 生产问题清单", 1)[1].split("## P0 结论", 1)[0]
+    self.assertNotIn("调整开场文案", issue_section)
+
   def test_same_inputs_reuse_previous_state_and_report(self):
     target = "2026-07-13"
     self.append_observations(target, [{

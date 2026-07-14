@@ -70,12 +70,34 @@ Eligible updates are ranked by priority, explicit promotion, deterministic evide
 - Invalid NDJSON must not overwrite the original file or the previous successful state.
 - P0 never modifies formal Skills, Rules, Hooks, Agents, production scripts, or versions.
 
+## Production Issue Loop
+
+Use the existing Observation ledger as the single source of truth for production
+blockers. Do not create a second issue database.
+
+```text
+blocker -> Observation -> finish through stable workaround/fallback
+        -> post-run triage -> confirmed fix candidate -> next Engineering Loop
+```
+
+- First occurrence: record symptom, stage, impact, evidence, and workaround;
+  normally omit `--promote`.
+- After production: classify transient/input/operator/system causes.
+- Confirmed system defect: add reproducible evidence and `--promote`.
+- Existing locked TopK remains unchanged unless a P0 failure blocks Stable.
+- Keep the production issue list local by default. Public GitHub Issues require
+  sanitized content and explicit user intent.
+
 ## Outputs
 
 ```text
 00_state/evolution/YYYY-MM-DD.json
 17_reports/evolution/YYYY-MM-DD-daily-evolution.md
 ```
+
+The daily report includes a `生产问题清单` view derived from production-related
+Observations. `needs-evidence` means triage is still pending; `parked-topk` means
+the issue is confirmed but waiting for a later engineering round.
 
 Error report:
 

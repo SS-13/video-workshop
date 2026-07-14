@@ -192,6 +192,32 @@ Lane B: 预处理/转写/SRT 纠错/字幕门禁/最终渲染
 - 导出后立刻写 `00_state/production-stats.csv`。
 - 默认执行 `edit:render-day-v2`；v2 异常、polished 模式或旧任务断点续跑时立即切换 `edit:render-day-legacy`，不回滚或删除 v2 产物。
 
+## Production Issue Capture
+
+生产过程中遇到卡点时，不要只在对话里说明，也不要在当前视频中途修改
+Stable 生产代码。立即用现有 Observation 通道记录：
+
+```bash
+python3 09_tools/vp.py observe \
+  --date YYYY-MM-DD \
+  --summary "STAGE: 可复现的症状" \
+  --category bug \
+  --priority P2 \
+  --scope system-core \
+  --component COMPONENT \
+  --content-id CONTENT_ID \
+  --source production-blocker \
+  --evidence "impact=...; workaround=...; artifact=..."
+```
+
+记录范围包括：重试、超时、错误产物、缺少依赖、需要人工介入、启用回退通道、
+重复转写或重复编码。首次出现默认不加 `--promote`，避免把一次性环境问题当成
+系统缺陷。
+
+当前视频优先通过缓存、保守绕行或 legacy fallback 完成。成片和发布包完成后，
+把本次 Observation ID、临时绕行和影响写入完成通知。生产空闲后由 System
+Steward 统一归因；确认是需要修复的系统问题时，才进入下一轮工程 Loop。
+
 ## Handoff
 
 返回给主线程：

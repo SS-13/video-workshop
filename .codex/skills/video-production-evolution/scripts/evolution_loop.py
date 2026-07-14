@@ -30,6 +30,12 @@ VALID_CATEGORIES = {
   "integration-request",
   "uncategorized",
 }
+PRODUCTION_ISSUE_CATEGORIES = {
+  "bug",
+  "performance",
+  "integration-request",
+  "temporary-exception",
+}
 VALID_SCOPES = {
   "single-run",
   "content-profile",
@@ -467,6 +473,30 @@ def build_report(state: Dict[str, Any]) -> str:
   else:
     lines.append("无 backlog。")
 
+  production_issues = [
+    item for item in [*state["topK"], *state["backlog"]]
+    if item.get("category") in PRODUCTION_ISSUE_CATEGORIES
+  ]
+  lines.extend(["", "## 生产问题清单", ""])
+  if production_issues:
+    lines.extend([
+      "| Status | Priority | Component | Issue | Occurrences | Next |",
+      "| --- | --- | --- | --- | ---: | --- |",
+    ])
+    next_action = {
+      "candidate": "本轮工程候选",
+      "parked-topk": "下一轮工程候选",
+      "needs-evidence": "待复现/判断",
+    }
+    for item in production_issues:
+      lines.append(
+        f"| {item['status']} | {item['priority']} | "
+        f"{markdown_cell(item['affectedComponent'])} | {markdown_cell(item['summary'])} | "
+        f"{item['occurrenceCount']} | {next_action.get(item['status'], '待判断')} |"
+      )
+  else:
+    lines.append("今日没有记录生产卡点。")
+
   lines.extend([
     "",
     "## P0 结论",
@@ -474,6 +504,7 @@ def build_report(state: Dict[str, Any]) -> str:
     "- 所有有效更新均已保留。",
     f"- 仅前 `{state['topKLimit']}` 项进入当日 TopK。",
     "- 当日 TopK 首次选定后保持锁定；持续新增内容进入 backlog。",
+    "- 生产卡点先记录、后归因；确认需要修复的问题进入下一轮工程 Loop。",
     "- 本次 Loop 未修改正式 Skill、Rule、Hook、Agent、生产脚本或版本号。",
     "",
   ])

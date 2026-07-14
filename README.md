@@ -24,6 +24,7 @@ media stay on the local machine.
 ```bash
 git clone https://github.com/SS-13/video-workshop.git
 cd video-workshop
+python3 -m pip install -r requirements.txt
 npm run setup
 npm run context
 npm run doctor

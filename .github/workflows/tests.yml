@@ -20,6 +20,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+      - name: Python dependencies
+        run: python3 -m pip install -r requirements.txt
       - name: Control plane
         run: python3 -m unittest discover -s 09_tools/tests -p 'test_*.py'
       - name: Video edit helpers

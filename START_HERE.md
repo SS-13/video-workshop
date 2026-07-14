@@ -3,6 +3,7 @@
 ## 1. Initialize a Clone
 
 ```bash
+python3 -m pip install -r requirements.txt
 npm run setup
 npm run context
 npm run doctor

@@ -22,7 +22,7 @@ Pencil design -> approved immutable style version -> deterministic daily make
 - `references/cover-routes.json` stores public renderer tokens.
 - `15_cover_gallery/designs/` stores ignored Pencil sources, previews, and
   version manifests.
-- `15_cover_gallery/YYYY-MM-DD/` stores ignored daily revisions.
+- `15_cover_gallery/YYYY-MM-DD/<content-type>/<sequence>/` stores ignored daily revisions.
 
 Official Pencil remains an external dependency. Never commit Pencil account
 state, private assets, personal photos, or machine-specific paths.

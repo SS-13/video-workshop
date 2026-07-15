@@ -13,6 +13,8 @@ import shutil
 import subprocess
 import sys
 
+from video_production_core.content_layout import ContentRef
+
 from PIL import Image
 
 
@@ -239,10 +241,18 @@ def parse_key_values(text: str) -> Dict[str, str]:
   return values
 
 
-def default_output_prefix(root: Path, date: str, route: str, day_label: str) -> Path:
+def default_output_prefix(
+  root: Path,
+  date: str,
+  route: str,
+  day_label: str,
+  content_type: str = "video-diary",
+  sequence: str = "001",
+) -> Path:
   day_token = re.sub(r"[^A-Za-z0-9]+", "", day_label)
   identity = day_token or route.replace("-", "_")
-  return root / "05_exports" / date / f"{date}_{identity}_cover"
+  export_dir = ContentRef(date, content_type, sequence).media_dir(root, "05_exports")
+  return export_dir / f"{date}_{identity}_cover"
 
 
 def make_cover_pair(
@@ -258,6 +268,8 @@ def make_cover_pair(
   subtitle: str = "",
   note: str = "",
   output_prefix: Optional[str | Path] = None,
+  content_type: str = "video-diary",
+  sequence: str = "001",
 ) -> Dict[str, Any]:
   root = root.resolve()
   if not DATE_RE.fullmatch(date):
@@ -275,7 +287,7 @@ def make_cover_pair(
   prefix = (
     resolve_path(root, output_prefix)
     if output_prefix
-    else default_output_prefix(root, date, route_name, day_label)
+    else default_output_prefix(root, date, route_name, day_label, content_type, sequence)
   )
   prefix.parent.mkdir(parents=True, exist_ok=True)
 
@@ -285,6 +297,10 @@ def make_cover_pair(
     str(render_script),
     "--date",
     date,
+    "--content-type",
+    content_type,
+    "--sequence",
+    sequence,
     "--route",
     route_name,
     "--style-version",
@@ -310,7 +326,7 @@ def make_cover_pair(
 
   output_3x4 = prefix.parent / f"{prefix.name}_3x4.jpg"
   output_4x3 = prefix.parent / f"{prefix.name}_4x3.jpg"
-  manifest_path = root / "04_videos" / date / "cover-qc" / f"{prefix.name}_pair_manifest.json"
+  manifest_path = ContentRef(date, content_type, sequence).media_dir(root, "04_videos") / "cover-qc" / f"{prefix.name}_pair_manifest.json"
   for path in [output_3x4, output_4x3]:
     if not path.is_file():
       raise CoverWorkflowError(f"Cover renderer did not create: {path}")
@@ -326,6 +342,10 @@ def make_cover_pair(
       node_bin,
       str(archive_script),
       date,
+      "--content-type",
+      content_type,
+      "--sequence",
+      sequence,
       "--source",
       str(output_path),
       "--route",
@@ -346,6 +366,8 @@ def make_cover_pair(
 
   return {
     "date": date,
+    "contentType": content_type,
+    "sequence": ContentRef(date, content_type, sequence).sequence,
     "route": route_name,
     "styleVersion": style_version,
     "covers": {
@@ -410,8 +432,23 @@ def list_cover_history(root: Path, route: str = "", limit: int = 20) -> Dict[str
     for date_dir in sorted(gallery_root.iterdir(), reverse=True):
       if not date_dir.is_dir() or not DATE_RE.fullmatch(date_dir.name):
         continue
-      for row in parse_gallery_rows(date_dir / "INDEX.md", route_name):
-        revisions.append({"date": date_dir.name, **row})
+      indexes = sorted(date_dir.glob("*/*/INDEX.md"), reverse=True)
+      legacy_index = date_dir / "INDEX.md"
+      if legacy_index.is_file():
+        indexes.append(legacy_index)
+      for index_path in indexes:
+        relative_parts = index_path.relative_to(date_dir).parts
+        content_type = relative_parts[0] if len(relative_parts) >= 3 else "video-diary"
+        sequence = relative_parts[1] if len(relative_parts) >= 3 else "001"
+        for row in parse_gallery_rows(index_path, route_name):
+          revisions.append({
+            "date": date_dir.name,
+            "contentType": content_type,
+            "sequence": sequence,
+            **row,
+          })
+          if len(revisions) >= max(1, limit):
+            break
         if len(revisions) >= max(1, limit):
           break
       if len(revisions) >= max(1, limit):

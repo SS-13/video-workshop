@@ -12,6 +12,8 @@ const parseArgs = (argv) => {
   const noteIndex = args.indexOf("--note");
   const routeIndex = args.indexOf("--route");
   const styleIndex = args.indexOf("--style-version");
+  const contentTypeIndex = args.indexOf("--content-type");
+  const sequenceIndex = args.indexOf("--sequence");
 
   if (!date) {
     throw new Error("Usage: npm run archive-cover -- YYYY-MM-DD --source path/to/cover.jpg");
@@ -28,7 +30,9 @@ const parseArgs = (argv) => {
     title: titleIndex >= 0 ? args[titleIndex + 1] : "",
     note: noteIndex >= 0 ? args[noteIndex + 1] : "",
     route: routeIndex >= 0 ? args[routeIndex + 1] : "",
-    styleVersion: styleIndex >= 0 ? args[styleIndex + 1] : ""
+    styleVersion: styleIndex >= 0 ? args[styleIndex + 1] : "",
+    contentType: contentTypeIndex >= 0 ? args[contentTypeIndex + 1] : "video-diary",
+    sequence: sequenceIndex >= 0 ? args[sequenceIndex + 1] : "001"
   };
 };
 
@@ -97,7 +101,7 @@ const appendIndex = async (indexPath, row) => {
 };
 
 const main = async () => {
-  const { date, source, title, note, route, styleVersion } = parseArgs(process.argv);
+  const { date, source, title, note, route, styleVersion, contentType, sequence } = parseArgs(process.argv);
   const root = process.cwd();
   const sourcePath = path.resolve(root, source);
   const extension = path.extname(sourcePath);
@@ -106,7 +110,7 @@ const main = async () => {
     throw new Error("Cover source must be an image file.");
   }
 
-  const galleryDir = path.join(root, "15_cover_gallery", date);
+  const galleryDir = path.join(root, "15_cover_gallery", date, contentType, sequence);
   await mkdir(galleryDir, { recursive: true });
 
   const version = await getNextVersion(galleryDir);

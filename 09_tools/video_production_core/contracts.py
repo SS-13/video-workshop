@@ -73,6 +73,11 @@ def validate_contract_examples(root: Path) -> Dict[str, Any]:
       contract_root / "schemas" / "publish-package.schema.json",
       contract_root / "examples" / "publish-package.json",
     ),
+    (
+      "evolution-completion",
+      contract_root / "schemas" / "evolution-completion.schema.json",
+      contract_root / "examples" / "evolution-completion.json",
+    ),
   ]
   results = []
   all_errors: List[Dict[str, Any]] = []

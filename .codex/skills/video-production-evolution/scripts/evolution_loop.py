@@ -43,8 +43,29 @@ VALID_SCOPES = {
   "system-core",
   "platform-adapter",
 }
+VALID_CHANGE_TYPES = ("bugfix", "feature", "major-evolution")
+CHANGE_TYPE_DEFAULTS = {
+  "bugfix": {
+    "recommendedSemVer": "patch",
+    "compatibilityImpact": "backward-compatible-fix",
+    "requiresMigration": False,
+    "requiresCanary": False,
+  },
+  "feature": {
+    "recommendedSemVer": "minor",
+    "compatibilityImpact": "backward-compatible-feature",
+    "requiresMigration": False,
+    "requiresCanary": False,
+  },
+  "major-evolution": {
+    "recommendedSemVer": "major",
+    "compatibilityImpact": "core-contract-change",
+    "requiresMigration": True,
+    "requiresCanary": True,
+  },
+}
 DEFAULT_POLICY = {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "topK": 3,
   "lookbackDays": 7,
   "repeatThreshold": 2,
@@ -57,6 +78,13 @@ DEFAULT_POLICY = {
   },
   "selection": {
     "freezeDailyTopK": True,
+    "carryForwardBacklog": True,
+    "priorityAging": {
+      "enabled": True,
+      "daysPerLevel": 1,
+      "maximumPriority": "P0",
+      "p0OldestFirst": True,
+    },
   },
   "automation": {
     "modifyFormalRules": False,
@@ -132,6 +160,51 @@ def atomic_write_text(path: Path, content: str) -> None:
 def atomic_write_json(path: Path, payload: Dict[str, Any]) -> None:
   content = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
   atomic_write_text(path, content)
+
+
+def completion_path(root: Path, target_date: str) -> Path:
+  return root / "00_state" / "evolution" / "completed" / f"{target_date}.json"
+
+
+def load_completed_candidates(root: Path) -> Dict[str, Dict[str, Any]]:
+  completed: Dict[str, Dict[str, Any]] = {}
+  completed_root = root / "00_state" / "evolution" / "completed"
+  if not completed_root.exists():
+    return completed
+  for path in sorted(completed_root.glob("*.json")):
+    try:
+      payload = load_json(path)
+    except (OSError, json.JSONDecodeError):
+      continue
+    for entry in payload.get("completed", []):
+      candidate_id = str(entry.get("candidateId", "")).strip()
+      if not candidate_id or candidate_id in completed:
+        continue
+      completed[candidate_id] = {
+        **entry,
+        "completionRecord": str(path.relative_to(root)),
+      }
+  return completed
+
+
+def verified_relative_paths(root: Path, values: Iterable[str], label: str) -> List[str]:
+  verified: List[str] = []
+  for value in values:
+    raw = str(value).strip()
+    if not raw:
+      continue
+    path = Path(raw)
+    resolved = path.resolve() if path.is_absolute() else (root / path).resolve()
+    try:
+      relative = resolved.relative_to(root)
+    except ValueError as error:
+      raise EvolutionError(f"{label} must stay inside the workspace: {raw}") from error
+    if not resolved.exists():
+      raise EvolutionError(f"{label} does not exist: {relative}")
+    normalized = str(relative)
+    if normalized not in verified:
+      verified.append(normalized)
+  return verified
 
 
 class FileLease:
@@ -302,10 +375,61 @@ def timestamp_value(value: str) -> float:
     return 0.0
 
 
+def effective_priority(
+  priority: str,
+  first_seen_at: str,
+  target_date: str,
+  policy: Dict[str, Any],
+) -> Tuple[str, int, int]:
+  selection = policy.get("selection", {})
+  aging = selection.get("priorityAging", {})
+  if not aging.get("enabled", False):
+    return priority, 0, 0
+  try:
+    first_date = datetime.fromisoformat(first_seen_at.replace("Z", "+00:00")).date()
+  except ValueError:
+    first_date = date_type.fromisoformat(target_date)
+  age_days = max(0, (date_type.fromisoformat(target_date) - first_date).days)
+  days_per_level = max(1, int(aging.get("daysPerLevel", 1)))
+  raised_by = age_days // days_per_level
+  original_rank = priority_rank(priority, policy)
+  maximum_rank = priority_rank(str(aging.get("maximumPriority", "P0")), policy)
+  effective_rank = max(maximum_rank, original_rank - raised_by)
+  order = list(policy.get("priorityOrder", VALID_PRIORITIES))
+  if effective_rank >= len(order):
+    return priority, age_days, 0
+  return str(order[effective_rank]), age_days, max(0, original_rank - effective_rank)
+
+
+def carried_backlog_ids(root: Path, target_date: str, lookback_days: int) -> set[str]:
+  target = date_type.fromisoformat(target_date)
+  carried = set()
+  decided = set()
+  for offset in range(1, lookback_days):
+    state_path = root / "00_state" / "evolution" / f"{target - timedelta(days=offset)}.json"
+    if not state_path.is_file():
+      continue
+    try:
+      state = load_json(state_path)
+    except (OSError, json.JSONDecodeError):
+      continue
+    for item in state.get("topK", []):
+      candidate_id = str(item.get("id", ""))
+      if candidate_id:
+        decided.add(candidate_id)
+    for item in state.get("backlog", []):
+      candidate_id = str(item.get("id", ""))
+      if candidate_id and candidate_id not in decided:
+        carried.add(candidate_id)
+        decided.add(candidate_id)
+  return carried
+
+
 def group_updates(
   observations: List[Dict[str, Any]],
   target_date: str,
   policy: Dict[str, Any],
+  carry_forward_ids: Optional[set[str]] = None,
 ) -> List[Dict[str, Any]]:
   grouped: Dict[str, List[Dict[str, Any]]] = {}
   for observation in observations:
@@ -316,14 +440,18 @@ def group_updates(
   repeat_threshold = int(policy["repeatThreshold"])
   rules = policy.get("candidateRules", {})
   for fingerprint, items in grouped.items():
+    candidate_id = f"CAND-{fingerprint[:12]}"
     today_items = [item for item in items if item["date"] == target_date]
-    if not today_items:
+    if not today_items and candidate_id not in (carry_forward_ids or set()):
       continue
     ordered = sorted(items, key=lambda item: (timestamp_value(item["createdAt"]), item["id"]))
     latest = ordered[-1]
-    best_priority = min(
+    original_priority = min(
       (item["priority"] for item in items),
       key=lambda priority: priority_rank(priority, policy),
+    )
+    best_priority, age_days, priority_raised_by = effective_priority(
+      original_priority, ordered[0]["createdAt"], target_date, policy
     )
     promote_requested = any(item["promoteRequested"] for item in items)
     deterministic = any(
@@ -347,11 +475,14 @@ def group_updates(
     score += min(len(items), 20) * 5
     score += min(len(today_items), 10)
     updates.append({
-      "id": f"CAND-{fingerprint[:12]}",
+      "id": candidate_id,
       "fingerprint": fingerprint,
       "summary": latest["summary"],
       "category": latest["category"],
       "priority": best_priority,
+      "originalPriority": original_priority,
+      "ageDays": age_days,
+      "priorityRaisedBy": priority_raised_by,
       "scope": latest["scope"],
       "affectedComponent": latest["affectedComponent"],
       "occurrenceCount": len(items),
@@ -373,14 +504,30 @@ def group_updates(
 def select_top_k(
   updates: List[Dict[str, Any]],
   top_k: int,
+  policy: Dict[str, Any],
   frozen_top_k: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
   eligible = [update for update in updates if update["eligible"]]
-  eligible.sort(key=lambda update: (
-    -int(update["rankScore"]),
-    -timestamp_value(update["lastSeenAt"]),
-    update["fingerprint"],
-  ))
+  p0_oldest_first = bool(
+    policy.get("selection", {}).get("priorityAging", {}).get("p0OldestFirst", True)
+  )
+
+  def selection_key(update: Dict[str, Any]) -> Tuple[Any, ...]:
+    rank = priority_rank(update["priority"], policy)
+    p0_timestamp = (
+      timestamp_value(update["firstSeenAt"])
+      if p0_oldest_first and update["priority"] == "P0"
+      else float("inf")
+    )
+    return (
+      rank,
+      p0_timestamp,
+      -int(update["rankScore"]),
+      -timestamp_value(update["lastSeenAt"]),
+      update["fingerprint"],
+    )
+
+  eligible.sort(key=selection_key)
   eligible_by_id = {update["id"]: update for update in eligible}
   selected: List[Dict[str, Any]] = []
   selected_ids = set()
@@ -416,8 +563,7 @@ def select_top_k(
     backlog.append(backlog_update)
   backlog.sort(key=lambda update: (
     0 if update["eligible"] else 1,
-    -int(update["rankScore"]),
-    update["fingerprint"],
+    *selection_key(update),
   ))
   return ranked_selected, backlog
 
@@ -431,6 +577,12 @@ def markdown_cell(value: Any) -> str:
   return str(value).replace("|", "\\|").replace("\n", " ")
 
 
+def priority_label(item: Dict[str, Any]) -> str:
+  original = item.get("originalPriority", item.get("priority", ""))
+  current = item.get("priority", "")
+  return current if original == current else f"{original} -> {current}"
+
+
 def build_report(state: Dict[str, Any]) -> str:
   lines = [
     f"# {state['date']} Daily Engineering Loop",
@@ -442,18 +594,20 @@ def build_report(state: Dict[str, Any]) -> str:
     f"- 去重后更新：`{state['summary']['deduplicatedUpdateCount']}`",
     f"- Eligible Candidate：`{state['summary']['eligibleCandidateCount']}`",
     f"- Backlog：`{state['summary']['backlogCount']}`",
+    f"- TopK 已完成：`{state['summary'].get('completedTopKCount', 0)}`",
     "",
     "## 今日 TopK",
     "",
   ]
   if state["topK"]:
     lines.extend([
-      "| Rank | Priority | Update | Occurrences | Reason |",
-      "| ---: | --- | --- | ---: | --- |",
+      "| Rank | Status | Priority | First seen | Age | Update | Occurrences | Reason |",
+      "| ---: | --- | --- | --- | ---: | --- | ---: | --- |",
     ])
     for item in state["topK"]:
       lines.append(
-        f"| {item['rank']} | {item['priority']} | {markdown_cell(item['summary'])} | "
+        f"| {item['rank']} | {item['status']} | {priority_label(item)} | {item['firstSeenAt']} | "
+        f"{item.get('ageDays', 0)}d | {markdown_cell(item['summary'])} | "
         f"{item['occurrenceCount']} | {', '.join(item['eligibilityReasons'])} |"
       )
   else:
@@ -462,12 +616,13 @@ def build_report(state: Dict[str, Any]) -> str:
   lines.extend(["", "## Backlog", ""])
   if state["backlog"]:
     lines.extend([
-      "| Status | Priority | Update | Occurrences |",
-      "| --- | --- | --- | ---: |",
+      "| Status | Priority | First seen | Age | Update | Occurrences |",
+      "| --- | --- | --- | ---: | --- | ---: |",
     ])
     for item in state["backlog"]:
       lines.append(
-        f"| {item['status']} | {item['priority']} | {markdown_cell(item['summary'])} | "
+        f"| {item['status']} | {priority_label(item)} | {item['firstSeenAt']} | "
+        f"{item.get('ageDays', 0)}d | {markdown_cell(item['summary'])} | "
         f"{item['occurrenceCount']} |"
       )
   else:
@@ -485,6 +640,7 @@ def build_report(state: Dict[str, Any]) -> str:
     ])
     next_action = {
       "candidate": "本轮工程候选",
+      "completed": "已完成并进入 Release 候选清单",
       "parked-topk": "下一轮工程候选",
       "needs-evidence": "待复现/判断",
     }
@@ -504,6 +660,8 @@ def build_report(state: Dict[str, Any]) -> str:
     "- 所有有效更新均已保留。",
     f"- 仅前 `{state['topKLimit']}` 项进入当日 TopK。",
     "- 当日 TopK 首次选定后保持锁定；持续新增内容进入 backlog。",
+    f"- 今日 TopK 已有 `{state['summary'].get('completedTopKCount', 0)}` 项完成并写入追加式完成清单。",
+    "- Backlog 每跨一个自然日提升一级，最高 P0；P0 按 firstSeenAt 从早到晚排序。",
     "- 生产卡点先记录、后归因；确认需要修复的问题进入下一轮工程 Loop。",
     "- 本次 Loop 未修改正式 Skill、Rule、Hook、Agent、生产脚本或版本号。",
     "",
@@ -537,6 +695,116 @@ def active_production_locks(root: Path) -> List[str]:
     for path in lock_root.glob("production-*.lock.json")
     if path.is_file()
   )
+
+
+def complete_candidate(
+  root: Path,
+  target_date: str,
+  candidate_id: str,
+  change_type: str,
+  evidence_paths: Iterable[str],
+  artifact_paths: Iterable[str] = (),
+  actor: str = "system-steward-agent",
+  compatibility_impact: Optional[str] = None,
+  requires_migration: Optional[bool] = None,
+  requires_canary: Optional[bool] = None,
+) -> Dict[str, Any]:
+  target_date = validate_date(target_date)
+  root = Path(root).resolve()
+  candidate_id = str(candidate_id).strip()
+  if not candidate_id:
+    raise EvolutionError("Candidate id is required.")
+  if change_type not in VALID_CHANGE_TYPES:
+    raise EvolutionError(f"Invalid change type: {change_type}")
+  production_locks = active_production_locks(root)
+  if production_locks:
+    raise EvolutionDeferred(production_locks)
+
+  state_path = root / "00_state" / "evolution" / f"{target_date}.json"
+  if not state_path.is_file():
+    raise EvolutionError(f"Daily Evolution state does not exist: {target_date}")
+  state = load_json(state_path)
+  candidate = next(
+    (item for item in state.get("topK", []) if item.get("id") == candidate_id),
+    None,
+  )
+  if candidate is None:
+    raise EvolutionError(f"Candidate is not in the locked TopK: {candidate_id}")
+
+  evidence = verified_relative_paths(root, evidence_paths, "Evidence")
+  artifacts = verified_relative_paths(root, artifact_paths, "Artifact")
+  if not evidence:
+    raise EvolutionError("At least one verification evidence path is required.")
+
+  defaults = CHANGE_TYPE_DEFAULTS[change_type]
+  completed_at = now_iso()
+  entry = {
+    "completionId": f"DONE-{candidate_id.removeprefix('CAND-')}",
+    "candidateId": candidate_id,
+    "summary": candidate.get("summary", ""),
+    "priority": candidate.get("priority", "P2"),
+    "rank": candidate.get("rank"),
+    "completedAt": completed_at,
+    "actor": actor,
+    "validationEvidence": evidence,
+    "artifacts": artifacts,
+    "releaseCandidate": True,
+    "releaseTarget": None,
+    "changeType": change_type,
+    "recommendedSemVer": defaults["recommendedSemVer"],
+    "compatibilityImpact": compatibility_impact or defaults["compatibilityImpact"],
+    "requiresMigration": (
+      defaults["requiresMigration"] if requires_migration is None else requires_migration
+    ),
+    "requiresCanary": defaults["requiresCanary"] if requires_canary is None else requires_canary,
+    "status": "completed",
+  }
+
+  ledger_path = completion_path(root, target_date)
+  completion_lock = root / "00_state" / "locks" / "completion-write.lock.json"
+  reused = False
+  with FileLease(completion_lock, actor, "vp evolve complete"):
+    ledger = {
+      "schemaVersion": 1,
+      "date": target_date,
+      "completed": [],
+    }
+    if ledger_path.exists():
+      ledger = load_json(ledger_path)
+    existing = next(
+      (
+        item for item in ledger.get("completed", [])
+        if item.get("candidateId") == candidate_id
+      ),
+      None,
+    )
+    if existing is not None:
+      if existing.get("changeType") != change_type:
+        raise EvolutionError(
+          f"Completed candidate is immutable and already classified as "
+          f"{existing.get('changeType')}: {candidate_id}"
+        )
+      entry = existing
+      reused = True
+    else:
+      ledger.setdefault("completed", []).append(entry)
+      ledger["updatedAt"] = completed_at
+      atomic_write_json(ledger_path, ledger)
+
+  evolution = run_evolution(root, target_date, actor=actor)
+  completed_item = next(
+    (item for item in evolution.get("topK", []) if item.get("id") == candidate_id),
+    None,
+  )
+  if completed_item is None or completed_item.get("status") != "completed":
+    raise EvolutionError(f"Completion state was not reconciled: {candidate_id}")
+  return {
+    "completion": entry,
+    "completionRecord": str(ledger_path.relative_to(root)),
+    "statePath": evolution["statePath"],
+    "reportPath": evolution["reportPath"],
+    "reused": reused,
+  }
 
 
 def system_version(root: Path) -> str:
@@ -629,8 +897,47 @@ def run_evolution(
     ):
       frozen_top_k = existing.get("topK", [])
 
-    updates = group_updates(observations, target_date, policy)
-    selected, backlog = select_top_k(updates, top_k, frozen_top_k=frozen_top_k)
+    carry_ids = (
+      carried_backlog_ids(root, target_date, int(policy["lookbackDays"]))
+      if policy.get("selection", {}).get("carryForwardBacklog", True)
+      else set()
+    )
+    completed_candidates = load_completed_candidates(root)
+    updates = group_updates(
+      observations,
+      target_date,
+      policy,
+      carry_forward_ids=carry_ids,
+    )
+    frozen_ids = {
+      str(item.get("id", ""))
+      for item in (frozen_top_k or [])
+      if item.get("id")
+    }
+    selectable_updates = [
+      item for item in updates
+      if item["id"] not in completed_candidates or item["id"] in frozen_ids
+    ]
+    selected, backlog = select_top_k(
+      selectable_updates,
+      top_k,
+      policy,
+      frozen_top_k=frozen_top_k,
+    )
+    completed_ids = set(completed_candidates)
+    selected = [
+      {
+        **item,
+        "status": "completed",
+        "completedAt": completed_candidates[item["id"]].get("completedAt"),
+        "completionRecord": completed_candidates[item["id"]].get("completionRecord"),
+        "changeType": completed_candidates[item["id"]].get("changeType"),
+      }
+      if item["id"] in completed_candidates
+      else item
+      for item in selected
+    ]
+    backlog = [item for item in backlog if item["id"] not in completed_ids]
     today_observations = [item for item in observations if item["date"] == target_date]
     input_payload = {
       "date": target_date,
@@ -638,6 +945,17 @@ def run_evolution(
       "policy": policy,
       "systemVersion": system_version(root),
       "observations": observations,
+      "completed": [
+        {
+          "candidateId": item["candidateId"],
+          "completedAt": item.get("completedAt"),
+          "changeType": item.get("changeType"),
+        }
+        for item in sorted(
+          completed_candidates.values(),
+          key=lambda value: str(value.get("candidateId", "")),
+        )
+      ],
       "reselect": reselect,
     }
     input_hash = canonical_hash(input_payload)
@@ -671,6 +989,9 @@ def run_evolution(
         "eligibleCandidateCount": sum(1 for item in updates if item["eligible"]),
         "selectedTopKCount": len(selected),
         "backlogCount": len(backlog),
+        "completedTopKCount": sum(
+          1 for item in selected if item.get("status") == "completed"
+        ),
       },
       "automation": {
         "formalFilesModified": False,

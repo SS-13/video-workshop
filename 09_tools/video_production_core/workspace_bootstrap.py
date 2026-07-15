@@ -18,6 +18,7 @@ from video_production_core.registry import validate_control_plane
 WORKSPACE_DIRECTORIES = [
   "00_state/observations",
   "00_state/evolution",
+  "00_state/evolution/completed",
   "00_state/locks",
   "00_state/runs",
   "00_state/releases",

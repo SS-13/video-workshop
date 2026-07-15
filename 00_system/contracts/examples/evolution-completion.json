@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "date": "2030-01-01",
+  "updatedAt": "2030-01-01T18:00:00+08:00",
+  "completed": [
+    {
+      "completionId": "DONE-123456789abc",
+      "candidateId": "CAND-123456789abc",
+      "summary": "Add deterministic publish package validation",
+      "priority": "P1",
+      "rank": 1,
+      "completedAt": "2030-01-01T18:00:00+08:00",
+      "actor": "system-steward-agent",
+      "validationEvidence": [
+        "tests/reports/publish-package-validation.md"
+      ],
+      "artifacts": [
+        "09_tools/video_production_core/publish_package.py"
+      ],
+      "releaseCandidate": true,
+      "releaseTarget": null,
+      "changeType": "feature",
+      "recommendedSemVer": "minor",
+      "compatibilityImpact": "backward-compatible-feature",
+      "requiresMigration": false,
+      "requiresCanary": true,
+      "status": "completed"
+    }
+  ]
+}

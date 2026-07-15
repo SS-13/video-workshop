@@ -62,6 +62,7 @@ from video_production_core.run_store import (  # noqa: E402
   validate_run,
 )
 from evolution_loop import (  # noqa: E402
+  VALID_CHANGE_TYPES,
   EvolutionDeferred,
   EvolutionError,
   LeaseBusy,
@@ -69,6 +70,7 @@ from evolution_loop import (  # noqa: E402
   VALID_CATEGORIES,
   VALID_PRIORITIES,
   VALID_SCOPES,
+  complete_candidate,
   record_observation,
   run_evolution,
 )
@@ -114,6 +116,18 @@ def add_common_json_flag(parser: argparse.ArgumentParser) -> None:
   parser.add_argument("--json", action="store_true", help="Print a stable JSON envelope")
 
 
+def add_evolve_run_arguments(parser: argparse.ArgumentParser) -> None:
+  parser.add_argument("--date", default=today())
+  parser.add_argument("--top-k", type=int, default=None)
+  parser.add_argument("--actor", default="system-steward-agent")
+  parser.add_argument(
+    "--reselect",
+    action="store_true",
+    help="Explicitly recalculate today's TopK instead of preserving the first selection",
+  )
+  add_common_json_flag(parser)
+
+
 def build_parser() -> argparse.ArgumentParser:
   parser = argparse.ArgumentParser(prog="vp", description="Video production system CLI")
   parser.add_argument("--root", help="Workspace root; defaults to upward discovery or VIDEO_PRODUCTION_ROOT")
@@ -144,15 +158,35 @@ def build_parser() -> argparse.ArgumentParser:
   add_common_json_flag(observe)
 
   evolve = subparsers.add_parser("evolve", help="Run the P0 Daily Engineering Loop")
-  evolve.add_argument("--date", default=today())
-  evolve.add_argument("--top-k", type=int, default=None)
-  evolve.add_argument("--actor", default="system-steward-agent")
-  evolve.add_argument(
-    "--reselect",
-    action="store_true",
-    help="Explicitly recalculate today's TopK instead of preserving the first selection",
+  add_evolve_run_arguments(evolve)
+  evolve_subparsers = evolve.add_subparsers(dest="evolve_action")
+  evolve_run = evolve_subparsers.add_parser(
+    "run",
+    help="Run the Loop while preserving the legacy vp evolve --date form",
   )
-  add_common_json_flag(evolve)
+  add_evolve_run_arguments(evolve_run)
+  evolve_complete = evolve_subparsers.add_parser(
+    "complete",
+    help="Complete one locked TopK candidate with verification evidence",
+  )
+  evolve_complete.add_argument("candidate_id")
+  evolve_complete.add_argument("--date", default=today())
+  evolve_complete.add_argument("--change-type", choices=VALID_CHANGE_TYPES, required=True)
+  evolve_complete.add_argument("--evidence", action="append", required=True)
+  evolve_complete.add_argument("--artifact", action="append", default=[])
+  evolve_complete.add_argument("--compatibility-impact")
+  evolve_complete.add_argument(
+    "--requires-migration",
+    action=argparse.BooleanOptionalAction,
+    default=None,
+  )
+  evolve_complete.add_argument(
+    "--requires-canary",
+    action=argparse.BooleanOptionalAction,
+    default=None,
+  )
+  evolve_complete.add_argument("--actor", default="system-steward-agent")
+  add_common_json_flag(evolve_complete)
 
   system = subparsers.add_parser("system", help="Inspect the generic control plane")
   system_subparsers = system.add_subparsers(dest="system_action", required=True)
@@ -204,6 +238,8 @@ def build_parser() -> argparse.ArgumentParser:
     help="Render and archive one approved daily cover pair",
   )
   cover_make.add_argument("--date", required=True)
+  cover_make.add_argument("--content-type", default="video-diary")
+  cover_make.add_argument("--sequence", default="001")
   cover_make.add_argument("--route", default="video-diary")
   cover_make.add_argument("--version", default="")
   cover_make.add_argument("--day-label", default="")
@@ -283,6 +319,7 @@ def build_parser() -> argparse.ArgumentParser:
   release_canary_adopt.add_argument("--date", required=True)
   release_canary_adopt.add_argument("--publish-package")
   release_canary_adopt.add_argument("--content-type", default="video-diary")
+  release_canary_adopt.add_argument("--sequence", default="001")
   release_canary_adopt.add_argument("--script")
   release_canary_adopt.add_argument("--recording")
   release_canary_adopt.add_argument("--actor", default="system-steward-agent")
@@ -324,6 +361,7 @@ def build_parser() -> argparse.ArgumentParser:
   run_start = run_subparsers.add_parser("start", help="Create or reuse one production run")
   run_start.add_argument("--date", required=True)
   run_start.add_argument("--content-type", default="video-diary")
+  run_start.add_argument("--sequence", default="001")
   run_start.add_argument("--id")
   run_start.add_argument("--title", default="")
   run_start.add_argument("--channel", choices=["stable", "candidate", "canary"], default="stable")
@@ -377,6 +415,7 @@ def build_parser() -> argparse.ArgumentParser:
   run_finalize_active.add_argument("--date", required=True)
   run_finalize_active.add_argument("--publish-package")
   run_finalize_active.add_argument("--content-type", default="video-diary")
+  run_finalize_active.add_argument("--sequence", default="001")
   run_finalize_active.add_argument("--script")
   run_finalize_active.add_argument("--recording")
   run_finalize_active.add_argument("--actor", default="video-agent")
@@ -478,6 +517,32 @@ def handle_evolve(root: Path, args: argparse.Namespace) -> int:
     print(f"backlog_count={result['summary']['backlogCount']}")
     print(f"report={result['reportPath']}")
     print(f"state={result['statePath']}")
+    print(f"reused={str(result['reused']).lower()}")
+  return 0
+
+
+def handle_evolve_complete(root: Path, args: argparse.Namespace) -> int:
+  result = complete_candidate(
+    root,
+    args.date,
+    args.candidate_id,
+    args.change_type,
+    evidence_paths=args.evidence,
+    artifact_paths=args.artifact,
+    actor=args.actor,
+    compatibility_impact=args.compatibility_impact,
+    requires_migration=args.requires_migration,
+    requires_canary=args.requires_canary,
+  )
+  if args.json:
+    print_json(json_envelope(root, result))
+  else:
+    completion = result["completion"]
+    print(f"candidate_id={completion['candidateId']}")
+    print(f"status={completion['status']}")
+    print(f"change_type={completion['changeType']}")
+    print(f"recommended_semver={completion['recommendedSemVer']}")
+    print(f"completion_record={result['completionRecord']}")
     print(f"reused={str(result['reused']).lower()}")
   return 0
 
@@ -588,6 +653,8 @@ def handle_cover(root: Path, args: argparse.Namespace) -> int:
       subtitle=args.subtitle,
       note=args.note,
       output_prefix=args.output_prefix,
+      content_type=args.content_type,
+      sequence=args.sequence,
     )
     if args.json:
       print_json(json_envelope(root, data))
@@ -782,6 +849,7 @@ def handle_release_canary_adopt(root: Path, args: argparse.Namespace) -> int:
     script_path=args.script,
     recording_path=args.recording,
     actor=args.actor,
+    sequence=args.sequence,
   )
   validation = data["validation"]
   if args.json:
@@ -864,6 +932,7 @@ def handle_run(root: Path, args: argparse.Namespace) -> int:
       run_id=args.id,
       channel=args.channel,
       actor=args.actor,
+      sequence=args.sequence,
     )
     if args.json:
       print_json(json_envelope(root, data))
@@ -957,6 +1026,7 @@ def handle_run(root: Path, args: argparse.Namespace) -> int:
       script_path=args.script,
       recording_path=args.recording,
       actor=args.actor,
+      sequence=args.sequence,
     )
     if args.json:
       print_json(json_envelope(root, data))
@@ -989,6 +1059,8 @@ def main(argv: Optional[list] = None) -> int:
       return handle_context(root, args)
     if args.command == "observe":
       return handle_observe(root, args)
+    if args.command == "evolve" and args.evolve_action == "complete":
+      return handle_evolve_complete(root, args)
     if args.command == "evolve":
       return handle_evolve(root, args)
     if args.command == "system" and args.system_action == "info":

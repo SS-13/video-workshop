@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "topK": 3,
   "lookbackDays": 7,
   "repeatThreshold": 2,
@@ -11,7 +11,14 @@
     "deterministicFinding": true
   },
   "selection": {
-    "freezeDailyTopK": true
+    "freezeDailyTopK": true,
+    "carryForwardBacklog": true,
+    "priorityAging": {
+      "enabled": true,
+      "daysPerLevel": 1,
+      "maximumPriority": "P0",
+      "p0OldestFirst": true
+    }
   },
   "automation": {
     "modifyFormalRules": false,

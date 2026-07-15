@@ -12,6 +12,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 from evolution_loop import (  # noqa: E402
   EvolutionDeferred,
   ObservationParseError,
+  complete_candidate,
   record_observation,
   run_evolution,
 )
@@ -111,6 +112,158 @@ class EvolutionLoopTest(unittest.TestCase):
     self.assertEqual(len(result["topK"]), 2)
     policy = json.loads((self.root / "00_system" / "evolution-policy.json").read_text(encoding="utf-8"))
     self.assertEqual(policy["topK"], 3)
+
+  def test_completed_top_k_is_append_only_and_survives_same_day_rerun(self):
+    target = "2026-07-13"
+    self.append_observations(target, [
+      {"summary": "任务一", "priority": "P0", "promoteRequested": True},
+      {"summary": "任务二", "priority": "P1", "promoteRequested": True},
+      {"summary": "任务三", "priority": "P2", "promoteRequested": True},
+    ])
+    first = run_evolution(self.root, target)
+    candidate_id = first["topK"][0]["id"]
+    evidence = self.root / "evidence.txt"
+    artifact = self.root / "artifact.json"
+    evidence.write_text("passed\n", encoding="utf-8")
+    artifact.write_text("{}\n", encoding="utf-8")
+
+    completed = complete_candidate(
+      self.root,
+      target,
+      candidate_id,
+      "feature",
+      [str(evidence)],
+      [str(artifact)],
+      actor="test",
+      requires_canary=True,
+    )
+    repeated = complete_candidate(
+      self.root,
+      target,
+      candidate_id,
+      "feature",
+      [str(evidence)],
+      [str(artifact)],
+      actor="test",
+      requires_canary=True,
+    )
+    record_observation(self.root, {
+      "date": target,
+      "summary": "午间新增需求",
+      "category": "new-capability",
+      "priority": "P0",
+      "scope": "system-core",
+      "actor": "test",
+      "promoteRequested": True,
+    })
+    rerun = run_evolution(self.root, target)
+
+    ledger = json.loads(
+      (self.root / completed["completionRecord"]).read_text(encoding="utf-8")
+    )
+    self.assertEqual(len(ledger["completed"]), 1)
+    self.assertTrue(repeated["reused"])
+    self.assertEqual(
+      [item["id"] for item in rerun["topK"]],
+      [item["id"] for item in first["topK"]],
+    )
+    self.assertEqual(rerun["topK"][0]["status"], "completed")
+    self.assertEqual(rerun["topK"][0]["changeType"], "feature")
+    self.assertEqual(rerun["summary"]["completedTopKCount"], 1)
+    self.assertTrue(ledger["completed"][0]["releaseCandidate"])
+    self.assertIsNone(ledger["completed"][0]["releaseTarget"])
+    self.assertEqual(ledger["completed"][0]["recommendedSemVer"], "minor")
+    self.assertTrue(ledger["completed"][0]["requiresCanary"])
+
+  def test_completed_candidate_does_not_return_on_a_later_day(self):
+    first_date = "2026-07-12"
+    next_date = "2026-07-13"
+    self.write_policy(top_k=1)
+    self.append_observations(first_date, [{
+      "summary": "已经完成的能力",
+      "priority": "P0",
+      "promoteRequested": True,
+    }])
+    first = run_evolution(self.root, first_date)
+    evidence = self.root / "completion-evidence.txt"
+    evidence.write_text("passed\n", encoding="utf-8")
+    complete_candidate(
+      self.root,
+      first_date,
+      first["topK"][0]["id"],
+      "bugfix",
+      [str(evidence)],
+      actor="test",
+    )
+    self.append_observations(next_date, [
+      {
+        "summary": "已经完成的能力",
+        "priority": "P0",
+        "promoteRequested": True,
+      },
+      {
+        "summary": "新的候选能力",
+        "priority": "P1",
+        "promoteRequested": True,
+      },
+    ])
+
+    next_state = run_evolution(self.root, next_date)
+
+    self.assertEqual(next_state["topK"][0]["summary"], "新的候选能力")
+    self.assertNotIn(
+      "已经完成的能力",
+      [item["summary"] for item in next_state["backlog"]],
+    )
+
+  def test_carried_backlog_priority_rises_one_level_per_day(self):
+    first_date = "2026-07-12"
+    next_date = "2026-07-13"
+    self.write_policy(top_k=1)
+    self.append_observations(first_date, [
+      {"summary": "当日阻断项", "priority": "P0", "promoteRequested": True},
+      {"summary": "延期任务", "priority": "P2", "promoteRequested": True},
+    ])
+
+    first = run_evolution(self.root, first_date)
+    second = run_evolution(self.root, next_date)
+
+    self.assertEqual(first["topK"][0]["summary"], "当日阻断项")
+    self.assertEqual(second["topK"][0]["summary"], "延期任务")
+    self.assertEqual(second["topK"][0]["originalPriority"], "P2")
+    self.assertEqual(second["topK"][0]["priority"], "P1")
+    self.assertEqual(second["topK"][0]["ageDays"], 1)
+    self.assertEqual(second["topK"][0]["priorityRaisedBy"], 1)
+
+  def test_p0_ties_are_sorted_oldest_first(self):
+    target = "2026-07-13"
+    self.append_observations(target, [
+      {
+        "summary": "较新的P0",
+        "priority": "P0",
+        "promoteRequested": True,
+        "createdAt": f"{target}T12:03:00+08:00",
+      },
+      {
+        "summary": "最早的P0",
+        "priority": "P0",
+        "promoteRequested": True,
+        "createdAt": f"{target}T12:01:00+08:00",
+      },
+      {
+        "summary": "中间的P0",
+        "priority": "P0",
+        "promoteRequested": True,
+        "createdAt": f"{target}T12:02:00+08:00",
+      },
+    ])
+
+    result = run_evolution(self.root, target)
+
+    self.assertEqual(
+      [item["summary"] for item in result["topK"]],
+      ["最早的P0", "中间的P0", "较新的P0"],
+    )
 
   def test_repeated_observation_becomes_candidate(self):
     target_date = date.fromisoformat("2026-07-13")

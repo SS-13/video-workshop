@@ -29,6 +29,9 @@ is the fallback.
   folder name.
 - Read `.codex/skills/video-diary-orchestrator/SKILL.md` before routing a full
   production request.
+- All content uses one date-first key: `YYYY-MM-DD/<content-type>/<sequence>`.
+  The default key is `YYYY-MM-DD/video-diary/001`; use `002`, `003`, and so on
+  for additional items of the same type on the same date.
 
 ## Production Contract
 
@@ -118,6 +121,9 @@ Rules:
 - The first TopK selection for a date stays locked.
 - Later items remain in backlog unless a confirmed P0 production failure
   requires an explicit `--reselect`.
+- Complete a TopK item only with test, artifact, run, or explicit user evidence.
+- Completion is append-only, keeps `releaseTarget=null`, and must not reactivate
+  the candidate in a later Loop.
 - The Loop produces candidates and reports. It does not silently edit formal
   Skills, Agents, Rules, Hooks, production scripts, or release versions.
 - Do not run the Loop while a production lock is active.

@@ -61,7 +61,7 @@ input compliance check, writes a script to `02_scripts/`, and stops.
 Put the original file in:
 
 ```text
-03_recordings/YYYY-MM-DD/
+03_recordings/YYYY-MM-DD/video-diary/001/
 ```
 
 The filename may remain unchanged. Tell the AI that the video is uploaded and
@@ -82,7 +82,7 @@ After the cover pair, external SRT, and insert plan are confirmed, the system
 runs compliance review and one final render. The export directory contains:
 
 ```text
-05_exports/YYYY-MM-DD/
+05_exports/YYYY-MM-DD/video-diary/001/
 ├── *_video-diary.mp4
 ├── *_cover_3x4.jpg
 ├── *_cover_4x3.jpg

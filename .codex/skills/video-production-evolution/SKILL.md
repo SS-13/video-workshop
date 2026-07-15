@@ -36,6 +36,22 @@ Run the deterministic Loop through `scripts/evolution_loop.py` via the CLI:
 python3 09_tools/vp.py evolve --date YYYY-MM-DD
 ```
 
+Complete one locked TopK item only after verification evidence exists:
+
+```bash
+python3 09_tools/vp.py evolve complete CAND-xxxxxxxxxxxx \
+  --date YYYY-MM-DD \
+  --change-type feature \
+  --evidence path/to/test-report.md \
+  --artifact path/to/output
+```
+
+Completion is append-only and idempotent. It writes
+`00_state/evolution/completed/YYYY-MM-DD.json`, keeps the daily TopK locked,
+and prevents the completed candidate from returning in a later Loop. A
+completion becomes a Release candidate, but it does not choose a target
+version, bump a version, or change `activeRelease`.
+
 Optional TopK override:
 
 ```bash
@@ -57,13 +73,15 @@ An update is eligible when at least one condition is true:
 - Priority is `P0`.
 - A deterministic audit or validator marked the finding.
 
-Eligible updates are ranked by priority, explicit promotion, deterministic evidence, occurrence count, and recency. The first K become the daily TopK. Other eligible updates use `parked-topk`; non-eligible updates use `needs-evidence`.
+Unselected backlog carries into later daily runs. Each elapsed calendar day raises its effective priority by one level, capped at `P0`. Selection always processes effective `P0` before lower priorities; P0 ties use the earliest `firstSeenAt` first. After priority, explicit promotion, deterministic evidence, occurrence count, and recency break ties. The first K become the daily TopK. Other eligible updates use `parked-topk`; non-eligible updates use `needs-evidence`.
 
 ## Invariants
 
 - Process all valid observations for the date; do not truncate collection because TopK is small.
 - Default `K=3` unless configuration or an explicit CLI flag changes it.
 - Freeze the first daily TopK while allowing unlimited append-only observations.
+- Age only carried backlog; an item already selected into a prior TopK does not automatically repeat the next day.
+- Keep completed TopK entries visible as `completed`; never return them to Candidate or backlog.
 - Require explicit `--reselect` to replace an already selected daily item.
 - Re-running the same date with unchanged inputs must reuse the previous result.
 - Production locks defer the Loop.

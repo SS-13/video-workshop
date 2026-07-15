@@ -7,6 +7,8 @@ package.
 The repository contains the reusable production system. Personal content and
 media stay on the local machine.
 
+[简体中文 README](README.zh-CN.md)
+
 ## What It Covers
 
 - raw idea intake and teleprompter script writing;
@@ -179,11 +181,13 @@ npm run new-day -- YYYY-MM-DD --day 42
 The user can now send a raw idea. The Agent preserves it in `01_inbox/`, runs
 input compliance review, and writes the recording script to `02_scripts/` when
 asked. After the user places the real recording in
-`03_recordings/YYYY-MM-DD/`, transcription can start directly:
+`03_recordings/YYYY-MM-DD/video-diary/001/`, transcription can start directly:
 
 ```bash
 npm run subtitle:transcribe -- \
   --date YYYY-MM-DD \
+  --content-type video-diary \
+  --sequence 001 \
   --engine auto \
   --model base \
   --word-timestamps
@@ -288,10 +292,16 @@ These files never need to enter the public repository.
 ```bash
 python3 09_tools/vp.py observe --summary "subtitle was early" --priority P1
 python3 09_tools/vp.py evolve --date YYYY-MM-DD
+python3 09_tools/vp.py evolve complete CAND-xxxxxxxxxxxx \
+  --date YYYY-MM-DD \
+  --change-type feature \
+  --evidence path/to/test-report.md
 ```
 
 All observations are retained. At most three enter the first locked TopK for a
-day. The Loop proposes candidates; it does not silently rewrite the system.
+day. Verified completions enter an append-only local ledger and become unassigned
+Release candidates; they do not bump or activate a version. The implementation,
+contract, tests, and CLI are public, while real completion evidence remains local.
 
 ## Optional Integrations
 

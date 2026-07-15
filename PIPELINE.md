@@ -58,13 +58,13 @@ version inspection  -> vp cover history
 
 | Stage | Canonical artifact | Owner |
 | --- | --- | --- |
-| Intake | `01_inbox/YYYY-MM-DD.md` | Text Agent |
-| Script | `02_scripts/YYYY-MM-DD.md` | Text Agent |
-| Source | `03_recordings/YYYY-MM-DD/*` | User, read-only to Agents |
-| Review | `04_videos/YYYY-MM-DD/REVIEW.md` | Video Agent |
-| Corrected subtitle | `04_videos/YYYY-MM-DD/subtitles/*_corrected.srt` | Video Agent |
-| Covers | `05_exports/YYYY-MM-DD/*_cover_3x4.*`, `*_cover_4x3.*` | Video Agent |
-| Final video | `05_exports/YYYY-MM-DD/*_video-diary.mp4` | Video Agent |
+| Intake | `01_inbox/YYYY-MM-DD/<content-type>/<sequence>.md` | Text Agent |
+| Script | `02_scripts/YYYY-MM-DD/<content-type>/<sequence>.md` | Text Agent |
+| Source | `03_recordings/YYYY-MM-DD/<content-type>/<sequence>/*` | User, read-only to Agents |
+| Review | `04_videos/YYYY-MM-DD/<content-type>/<sequence>/REVIEW.md` | Video Agent |
+| Corrected subtitle | `04_videos/YYYY-MM-DD/<content-type>/<sequence>/subtitles/*_corrected.srt` | Video Agent |
+| Covers | `05_exports/YYYY-MM-DD/<content-type>/<sequence>/*_cover_3x4.*`, `*_cover_4x3.*` | Video Agent |
+| Final video | `05_exports/YYYY-MM-DD/<content-type>/<sequence>/*.mp4` | Video Agent |
 | Publish copy | `PUBLISH.md`, `publish-package.json` | Video Agent + Compliance Agent |
 | Metrics | `00_state/production-stats.csv` | Video Agent |
 
@@ -98,6 +98,8 @@ unlimited observations
   -> candidate report
   -> reviewed implementation
   -> tests / Shadow / Canary
+  -> append-only completion ledger
+  -> Release candidate with no target version
   -> explicit activation or rollback
 ```
 
@@ -110,9 +112,10 @@ wait for the next available TopK slot.
 
 ## Content Types
 
-- `video-diary`: default, date-first paths, increments Day.
-- `suisuinian`: explicit opt-in, column-first paths, no Day increment.
-- `reading-note`: explicit opt-in, column-first paths, no Day increment.
+- Every type uses `YYYY-MM-DD/<content-type>/<sequence>` paths.
+- `video-diary`: default, increments Day.
+- `suisuinian`: explicit opt-in, no Day increment.
+- `reading-note`: explicit opt-in, no Day increment.
 
 Use `python3 09_tools/vp.py route resolve` to inspect a route without executing
 it.

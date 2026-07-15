@@ -29,7 +29,7 @@ Before writing today's idea:
 npm run new-day -- YYYY-MM-DD
 ```
 
-Write the raw wording to `01_inbox/YYYY-MM-DD.md`. The Inbox is evidence and is
+Write the raw wording to `01_inbox/YYYY-MM-DD/<content-type>/<sequence>.md`. The Inbox is evidence and is
 never summarized or rewritten in place.
 
 Run a lightweight input compliance review. Mark risky claims, advertising-law
@@ -45,7 +45,7 @@ Use these style layers in order:
 3. public `00_system/defaults/speaking-style.md`;
 4. script Skill rules.
 
-Write `02_scripts/YYYY-MM-DD.md`. Keep facts and reasoning order, use speakable
+Write `02_scripts/YYYY-MM-DD/<content-type>/<sequence>.md`. Keep facts and reasoning order, use speakable
 sentences, and avoid generic marketing hooks. Stop here until the user has
 recorded and explicitly requests editing.
 
@@ -54,7 +54,7 @@ recorded and explicitly requests editing.
 The user places source media in:
 
 ```text
-03_recordings/YYYY-MM-DD/
+03_recordings/YYYY-MM-DD/<content-type>/<sequence>/
 ```
 
 Rules:
@@ -99,7 +99,7 @@ Subtitle rules:
 
 ## Stage 5: Combined Review Gate
 
-Create `04_videos/YYYY-MM-DD/REVIEW.md` containing:
+Create `04_videos/YYYY-MM-DD/<content-type>/<sequence>/REVIEW.md` containing:
 
 - 3:4 cover;
 - 4:3 cover;
@@ -146,7 +146,7 @@ Never delete the legacy route during a v2 rollout.
 The final export folder must contain:
 
 ```text
-05_exports/YYYY-MM-DD/
+05_exports/YYYY-MM-DD/<content-type>/<sequence>/
 ├── *_video-diary.mp4
 ├── *_cover_3x4.jpg
 ├── *_cover_4x3.jpg

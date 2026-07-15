@@ -335,7 +335,7 @@ class CoverWorkflowTest(unittest.TestCase):
           self.make_image(prefix.parent / f"{prefix.name}_3x4.jpg", (1080, 1440))
           self.make_image(prefix.parent / f"{prefix.name}_4x3.jpg", (1440, 1080))
           manifest = (
-            command_root / "04_videos/2026-07-14/cover-qc"
+            command_root / "04_videos/2026-07-14/video-diary/001/cover-qc"
             / f"{prefix.name}_pair_manifest.json"
           )
           manifest.parent.mkdir(parents=True, exist_ok=True)
@@ -460,7 +460,7 @@ class ContractValidationTest(unittest.TestCase):
     result = validate_contract_examples(PROJECT_ROOT)
 
     self.assertTrue(result["valid"], result["errors"])
-    self.assertEqual(len(result["contracts"]), 3)
+    self.assertEqual(len(result["contracts"]), 4)
 
   def test_invalid_contract_is_detected(self):
     schema = load_contract_json(
@@ -822,11 +822,15 @@ class CanaryValidationTest(unittest.TestCase):
       },
     }), encoding="utf-8")
 
-    srt_path = root / "04_videos" / "2026-07-13" / "subtitles" / "corrected.srt"
-    video_path = root / "05_exports" / "2026-07-13" / "final.mp4"
-    cover_3x4 = root / "05_exports" / "2026-07-13" / "cover_3x4.png"
-    cover_4x3 = root / "05_exports" / "2026-07-13" / "cover_4x3.png"
-    publish_path = root / "05_exports" / "2026-07-13" / "publish-package.json"
+    workspace = root / "04_videos" / "2026-07-13" / "video-diary" / "001"
+    export_dir = root / "05_exports" / "2026-07-13" / "video-diary" / "001"
+    srt_path = workspace / "subtitles" / "corrected.srt"
+    video_path = export_dir / "final.mp4"
+    cover_3x4 = export_dir / "cover_3x4.png"
+    cover_4x3 = export_dir / "cover_4x3.png"
+    publish_path = export_dir / "publish-package.json"
+    srt_path.parent.mkdir(parents=True, exist_ok=True)
+    export_dir.mkdir(parents=True, exist_ok=True)
     srt_path.write_text("1\n00:00:00,000 --> 00:00:01,000\n测试\n", encoding="utf-8")
     video_path.write_bytes(b"canary-video")
     self.write_png_header(cover_3x4, 1080, 1440)
@@ -946,11 +950,11 @@ class CanaryValidationTest(unittest.TestCase):
       root = Path(directory)
       run_id, _ = self.make_canary_workspace(root, write_run=False)
       protected_paths = [
-        root / "04_videos" / "2026-07-13" / "subtitles" / "corrected.srt",
-        root / "05_exports" / "2026-07-13" / "final.mp4",
-        root / "05_exports" / "2026-07-13" / "cover_3x4.png",
-        root / "05_exports" / "2026-07-13" / "cover_4x3.png",
-        root / "05_exports" / "2026-07-13" / "publish-package.json",
+        root / "04_videos" / "2026-07-13" / "video-diary" / "001" / "subtitles" / "corrected.srt",
+        root / "05_exports" / "2026-07-13" / "video-diary" / "001" / "final.mp4",
+        root / "05_exports" / "2026-07-13" / "video-diary" / "001" / "cover_3x4.png",
+        root / "05_exports" / "2026-07-13" / "video-diary" / "001" / "cover_4x3.png",
+        root / "05_exports" / "2026-07-13" / "video-diary" / "001" / "publish-package.json",
       ]
       before = {path: path.read_bytes() for path in protected_paths}
 
@@ -995,9 +999,9 @@ class CanaryValidationTest(unittest.TestCase):
         write_run=False,
         package_system_version="2.1.0",
       )
-      source_package = root / "05_exports" / "2026-07-13" / "publish-package.json"
+      source_package = root / "05_exports" / "2026-07-13" / "video-diary" / "001" / "publish-package.json"
       source_bytes = source_package.read_bytes()
-      video = root / "05_exports" / "2026-07-13" / "final.mp4"
+      video = root / "05_exports" / "2026-07-13" / "video-diary" / "001" / "final.mp4"
       video_bytes = video.read_bytes()
 
       result = adopt_canary_run(root, date="2026-07-13", actor="test")
@@ -1064,7 +1068,7 @@ class CanaryValidationTest(unittest.TestCase):
       manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
       manifest["gates"]["realVideoCanary"] = "pass"
       manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-      video = root / "05_exports" / "2026-07-13" / "final.mp4"
+      video = root / "05_exports" / "2026-07-13" / "video-diary" / "001" / "final.mp4"
       video_bytes = video.read_bytes()
 
       activated = activate_release(root, confirm=True, actor="test")

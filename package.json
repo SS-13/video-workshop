@@ -16,7 +16,7 @@
     "release:readiness": "python3 09_tools/vp.py release readiness",
     "release:activate": "python3 09_tools/vp.py release activate",
     "release:rollback": "python3 09_tools/vp.py release rollback",
-    "new-day": "node 09_tools/new-day.mjs",
+    "new-day": "python3 09_tools/new-day.py",
     "archive-cover": "node .codex/skills/video-diary-cover/scripts/archive-cover.mjs",
     "archive-month": "python3 .codex/skills/video-diary-monthly-review/scripts/monthly_review.py review",
     "monthly-review": "python3 .codex/skills/video-diary-monthly-review/scripts/monthly_review.py review",

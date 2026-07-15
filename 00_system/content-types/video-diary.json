@@ -4,7 +4,7 @@
   "displayName": "视频日记",
   "enabled": true,
   "default": true,
-  "pathStrategy": "date-first",
+  "pathStrategy": "date-content-sequence",
   "counter": {
     "enabled": true,
     "type": "day"

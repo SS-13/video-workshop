@@ -132,7 +132,7 @@ def subtitle_score(path: Path) -> int:
 
 
 def select_best_subtitle(root: Path, date: str) -> Path | None:
-  subtitles_dir = root / "04_videos" / date / "subtitles"
+  subtitles_dir = root / "04_videos" / date / "video-diary" / "001" / "subtitles"
   if not subtitles_dir.exists():
     return None
   candidates = [path for path in subtitles_dir.glob("*.srt") if path.is_file()]
@@ -174,8 +174,8 @@ def write_manuscripts(root: Path, month: str, archive_dir: Path) -> tuple[Path, 
   ]
 
   for date in list_month_dates(root, month):
-    inbox_path = root / "01_inbox" / f"{date}.md"
-    script_path = root / "02_scripts" / f"{date}.md"
+    inbox_path = root / "01_inbox" / date / "video-diary" / "001.md"
+    script_path = root / "02_scripts" / date / "video-diary" / "001.md"
     subtitle_path = select_best_subtitle(root, date)
     if subtitle_path:
       selected_subtitles[date] = subtitle_path.relative_to(root).as_posix()

@@ -20,7 +20,7 @@ When the user adds today's idea, always initialize today's workspace first. Use 
 npm run new-day -- YYYY-MM-DD
 ```
 
-3. Write the user's raw wording into `01_inbox/YYYY-MM-DD.md` under the next topic slot.
+3. Write the user's raw wording into `01_inbox/YYYY-MM-DD/<content-type>/<sequence>.md`.
 4. Preserve the problem-purification fields if the template has them:
    - `内容类型：问题解法 / 想法分享`
    - `这条在回答什么问题`
@@ -28,7 +28,7 @@ npm run new-day -- YYYY-MM-DD
    - `我这条想给出的最小结论`
 5. Fill these fields only when the answer is obvious from the user's raw wording. Otherwise leave them blank for the script stage.
 6. Keep `录制状态：未生成脚本`.
-7. If `02_scripts/YYYY-MM-DD.md` or `06_logs/YYYY-MM-DD.md` has a stale Day label, fix only the Day label.
+7. If the matching Script or Log file has a stale Day label, fix only the Day label.
 8. Stop. Wait for the user to say `生成脚本` or equivalent.
 
 ## Rules
@@ -38,6 +38,7 @@ npm run new-day -- YYYY-MM-DD
 - Do not move the content into `02_scripts/` during intake.
 - Auto-creating the day workspace is allowed and required; do not auto-trigger script generation or editing from directory changes.
 - Day number increments by successful outputs, not by calendar dates. Prefer `npm run new-day` over manual calculation.
+- For a second item of the same type on the same date, run `npm run new-day -- YYYY-MM-DD --content-type TYPE --next`.
 - If the user says there will be more topics today, record the current topic and stop.
 
 ## Output

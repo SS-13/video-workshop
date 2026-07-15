@@ -14,7 +14,7 @@
     "release:readiness": {"owner": "video-production-release", "command": "python3 09_tools/vp.py release readiness"},
     "release:activate": {"owner": "video-production-release", "command": "python3 09_tools/vp.py release activate"},
     "release:rollback": {"owner": "video-production-release", "command": "python3 09_tools/vp.py release rollback"},
-    "new-day": {"owner": "video-diary-intake", "command": "node 09_tools/new-day.mjs"},
+    "new-day": {"owner": "video-diary-intake", "command": "python3 09_tools/new-day.py"},
     "archive-cover": {"owner": "video-diary-cover", "command": "node .codex/skills/video-diary-cover/scripts/archive-cover.mjs"},
     "archive-month": {"owner": "video-diary-monthly-review", "command": "python3 .codex/skills/video-diary-monthly-review/scripts/monthly_review.py review"},
     "monthly-review": {"owner": "video-diary-monthly-review", "command": "python3 .codex/skills/video-diary-monthly-review/scripts/monthly_review.py review"},

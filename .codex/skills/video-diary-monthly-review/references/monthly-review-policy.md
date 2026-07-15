@@ -10,9 +10,9 @@ It is not part of the normal daily pipeline.
 
 The month archive keeps text and metadata:
 
-- `01_inbox/YYYY-MM-DD.md`
-- `02_scripts/YYYY-MM-DD.md`
-- `06_logs/YYYY-MM-DD.md`
+- `01_inbox/YYYY-MM-DD/<content-type>/<sequence>.md`
+- `02_scripts/YYYY-MM-DD/<content-type>/<sequence>.md`
+- `06_logs/YYYY-MM-DD/<content-type>/<sequence>.md`
 - monthly rows from `00_state/publish-ledger.csv`, with `06_logs/publish-ledger.csv` as fallback
 - monthly video file manifest
 - production stats derived from `00_state/production-stats.csv`, with daily logs and publish ledger as fallback

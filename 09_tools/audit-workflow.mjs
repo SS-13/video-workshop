@@ -199,18 +199,7 @@ const listDateDirs = async (root, dirName) => {
 };
 
 const listDateFiles = async (root, dirName) => {
-  const dirPath = path.join(root, dirName);
-  if (!await pathExists(dirPath)) {
-    return [];
-  }
-
-  const entries = await readdir(dirPath, { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isFile())
-    .map((entry) => entry.name)
-    .filter((name) => DATE_RE.test(name.replace(/\.md$/, "")))
-    .map((name) => name.replace(/\.md$/, ""))
-    .sort();
+  return listDateDirs(root, dirName);
 };
 
 const getDates = async (root, ledgerRows) => {
@@ -273,13 +262,14 @@ const safeJson = async (filePath) => {
 };
 
 const summarizeDate = async (root, date, ledgerRow) => {
-  const inboxPath = path.join(root, "01_inbox", `${date}.md`);
-  const scriptPath = path.join(root, "02_scripts", `${date}.md`);
-  const logPath = path.join(root, "06_logs", `${date}.md`);
-  const recordingDir = path.join(root, "03_recordings", date);
-  const videoDir = path.join(root, "04_videos", date);
-  const exportDir = path.join(root, "05_exports", date);
-  const coverDir = path.join(root, "15_cover_gallery", date);
+  const contentPath = [date, "video-diary", "001"];
+  const inboxPath = path.join(root, "01_inbox", date, "video-diary", "001.md");
+  const scriptPath = path.join(root, "02_scripts", date, "video-diary", "001.md");
+  const logPath = path.join(root, "06_logs", date, "video-diary", "001.md");
+  const recordingDir = path.join(root, "03_recordings", ...contentPath);
+  const videoDir = path.join(root, "04_videos", ...contentPath);
+  const exportDir = path.join(root, "05_exports", ...contentPath);
+  const coverDir = path.join(root, "15_cover_gallery", ...contentPath);
   const recordingFiles = await listFilesShallow(recordingDir);
   const exportFiles = await listFilesShallow(exportDir);
   const coverFiles = await listFilesShallow(coverDir);

@@ -4,7 +4,7 @@
   "displayName": "读书笔记",
   "enabled": true,
   "default": false,
-  "pathStrategy": "column-first",
+  "pathStrategy": "date-content-sequence",
   "counter": {
     "enabled": false,
     "type": "sequence"

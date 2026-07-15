@@ -14,8 +14,8 @@ Turn raw thought into speakable teleprompter copy. Do not make it a marketing sc
 Read these before rewriting:
 
 ```text
-01_inbox/YYYY-MM-DD.md
-02_scripts/YYYY-MM-DD.md
+01_inbox/YYYY-MM-DD/<content-type>/<sequence>.md
+02_scripts/YYYY-MM-DD/<content-type>/<sequence>.md
 00_system/defaults/speaking-style.md
 .codex/skills/video-diary-script/references/retention/two-second-retention.md
 ```
@@ -77,7 +77,7 @@ Do not force every diary into a utilitarian problem-solving script. The workflow
 
 ## Output Structure
 
-Update `02_scripts/YYYY-MM-DD.md` with:
+Update the matching `02_scripts/YYYY-MM-DD/<content-type>/<sequence>.md` with:
 
 ```text
 ## S01 标题
@@ -109,21 +109,21 @@ In `### 前2秒检查`, include:
 
 ## State Update
 
-After generating a script, update the corresponding topic in `01_inbox/YYYY-MM-DD.md`:
+After generating a script, update the corresponding Inbox content item:
 
 ```text
 - 录制状态：已生成脚本
 ```
 
-Update `06_logs/YYYY-MM-DD.md` Script Agent line with a short factual note.
+Update the matching date/type/sequence Log file with a short factual note.
 
 When manually creating a new script day instead of running `npm run new-day -- YYYY-MM-DD`, also create the matching workflow directories:
 
 ```text
-03_recordings/YYYY-MM-DD/
-04_videos/YYYY-MM-DD/
-05_exports/YYYY-MM-DD/
-15_cover_gallery/YYYY-MM-DD/
+03_recordings/YYYY-MM-DD/<content-type>/<sequence>/
+04_videos/YYYY-MM-DD/<content-type>/<sequence>/
+05_exports/YYYY-MM-DD/<content-type>/<sequence>/
+15_cover_gallery/YYYY-MM-DD/<content-type>/<sequence>/
 ```
 
 ## Stop Condition

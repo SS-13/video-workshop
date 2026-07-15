@@ -41,7 +41,7 @@ Read opening analysis rules when doing a content retro:
 
 ## Analysis Boundary
 
-For content analysis, combine Douyin metrics with `02_scripts/YYYY-MM-DD.md` and final title/cover notes. If using cheat-on-content skills, trigger them explicitly for scoring, prediction, retro, or audience analysis.
+For content analysis, combine Douyin metrics with the matching `02_scripts/YYYY-MM-DD/<content-type>/<sequence>.md` and final title/cover notes. If using cheat-on-content skills, trigger them explicitly for scoring, prediction, retro, or audience analysis.
 
 For high two-second bounce or weak average watch time, classify likely cause:
 

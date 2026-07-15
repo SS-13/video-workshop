@@ -117,10 +117,14 @@ def desired_ledger_row(
     "day_label": stats.get("day_label", ""),
     "title": desired_title,
     "status": "exported" if promote_existing else current_status,
-    "inbox_ref": current.get("inbox_ref") or default_reference(root, f"01_inbox/{date}.md"),
-    "script_ref": current.get("script_ref") or default_reference(root, f"02_scripts/{date}.md"),
-    "recording_ref": current.get("recording_ref") or f"03_recordings/{date}/",
-    "workspace_ref": current.get("workspace_ref") or f"04_videos/{date}/",
+    "inbox_ref": current.get("inbox_ref") or default_reference(
+      root, f"01_inbox/{date}/video-diary/001.md"
+    ),
+    "script_ref": current.get("script_ref") or default_reference(
+      root, f"02_scripts/{date}/video-diary/001.md"
+    ),
+    "recording_ref": current.get("recording_ref") or f"03_recordings/{date}/video-diary/001/",
+    "workspace_ref": current.get("workspace_ref") or f"04_videos/{date}/video-diary/001/",
     "export_ref": current.get("export_ref") or stats.get("video_path", ""),
     "cover_ref": current.get("cover_ref") or stats.get("cover_path", ""),
     "notes": note,

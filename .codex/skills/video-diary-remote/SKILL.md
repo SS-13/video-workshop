@@ -26,7 +26,7 @@ npm run feishu-worker:dry-run
 - Worker status is recorded in `06_logs/feishu-worker-status.json`.
 - Worker logs are in `06_logs/feishu-worker.log`.
 - If the first idea of a new day arrives remotely, ensure the day workspace exists.
-- Raw ideas go to `01_inbox/YYYY-MM-DD.md`; scripts go to `02_scripts/YYYY-MM-DD.md`.
+- Raw ideas go to `01_inbox/YYYY-MM-DD/video-diary/001.md`; scripts go to `02_scripts/YYYY-MM-DD/video-diary/001.md`.
 
 ## Output
 

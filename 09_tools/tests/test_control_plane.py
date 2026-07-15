@@ -192,12 +192,14 @@ class WorkspaceBootstrapTest(unittest.TestCase):
       shutil.copy2(PROJECT_ROOT / "WORKFLOW.md", root / "WORKFLOW.md")
       initialize_workspace(root)
       (root / "01_inbox" / "sample.md").write_text("sample\n", encoding="utf-8")
+      (root / "06_logs" / "README.md").write_text("public placeholder\n", encoding="utf-8")
 
       context = build_ai_context(root)
 
       self.assertEqual(context["publicReadOrder"][0], "AGENTS.md")
       self.assertEqual(context["personalization"]["status"], "pending")
       self.assertIn("01_inbox/sample.md", context["personalization"]["sourceFiles"])
+      self.assertNotIn("06_logs/README.md", context["personalization"]["sourceFiles"])
 
 
 class CoverWorkflowTest(unittest.TestCase):

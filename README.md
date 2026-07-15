@@ -316,6 +316,8 @@ ignored by Git.
 - [START_HERE.md](START_HERE.md): first clone and first video
 - [PIPELINE.md](PIPELINE.md): system and artifact map
 - [WORKFLOW.md](WORKFLOW.md): current 3.0 production workflow
+- [MIGRATION.md](MIGRATION.md): date-first workspace migration and recovery
+- [MIGRATION.zh-CN.md](MIGRATION.zh-CN.md): 中文迁移与恢复说明
 - [.codex/agents/README.md](.codex/agents/README.md): Agent ownership
 - [CONTRIBUTING.md](CONTRIBUTING.md): PR scope, tests, and privacy rules
 

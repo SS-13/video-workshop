@@ -12,7 +12,9 @@ What behavior, command, Skill, or rule changed?
 - [ ] Video-edit tests pass
 - [ ] Daily Evolution tests pass
 - [ ] Registry and contracts pass
-- [ ] Clean-clone setup was considered
+- [ ] Clean-clone smoke passes on GitHub Actions
+- [ ] Layout changes include migration and recovery instructions
+- [ ] Production-path changes include real Canary evidence
 - [ ] No personal content, credentials, absolute home paths, or large media are included
 - [ ] Stable v2 and legacy fallback impact is documented
 

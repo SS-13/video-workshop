@@ -69,6 +69,10 @@ PERSONALIZATION_SOURCE_PATTERNS = [
   "06_logs/**/*.md",
 ]
 
+PERSONALIZATION_SOURCE_EXCLUDES = {
+  "06_logs/README.md",
+}
+
 CONTENT_LEDGER_FIELDS = [
   "content_id",
   "date",
@@ -301,7 +305,7 @@ def build_ai_context(root: Path) -> Dict[str, Any]:
     source_files.extend(
       relative_path(root, path)
       for path in root.glob(pattern)
-      if path.is_file()
+      if path.is_file() and relative_path(root, path) not in PERSONALIZATION_SOURCE_EXCLUDES
     )
   source_files = sorted(set(source_files))
 

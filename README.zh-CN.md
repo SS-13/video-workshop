@@ -229,12 +229,28 @@ python3 09_tools/vp.py evolve complete CAND-xxxxxxxxxxxx \
   --evidence path/to/test-report.md
 ```
 
+启用 GitHub Issues 集成后，每晚在 Loop 结束后同步公开安全的 TopK：
+
+```bash
+python3 09_tools/vp.py evolve issues sync \
+  --date YYYY-MM-DD \
+  --if-enabled
+```
+
+每个 TopK 都会映射到一个 Issue，标题直接使用事项摘要，不添加 `TopK` 前缀。
+Issue 使用 `type:bug / type:feature / type:other` 分类，并且只保留一个动态
+优先级标签。比如原始 `P3` 事项每过一天依次更新为 `P2`、`P1`、`P0`，不会
+重复开单。`vp evolve complete` 验证后，Issue 变为 `status:verified`；关联 PR
+使用 `Closes #N`，只有合并到 `main` 后才由 GitHub 自动关闭。
+
 - 每日默认只锁定 TopK=3；
 - 新需求持续进入 Backlog，不打断当天已锁定的 TopK；
 - 完成事项应带测试、产物或验收证据；
 - 完成项不会返回 Candidate，并保持 `releaseTarget=null`，直到进入明确的 Release 计划；
 - 后续 Release 按 `bugfix`、`feature`、`major-evolution` 分类组织；
 - Canary、回退与人工确认仍是版本切换的必要门禁。
+- 非公开范围也会建立 Issue，但只显示 Candidate ID、类型和动态优先级；个人语料、
+  内容 ID、证据路径和原始生产问题始终保留在本地。
 
 完成态的 CLI、Schema、测试和默认规则属于公开框架；真实完成清单、验收证据和
 个人产物仍保留在被 Git 忽略的本地工作区。

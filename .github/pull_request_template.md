@@ -18,6 +18,13 @@ What behavior, command, Skill, or rule changed?
 - [ ] No personal content, credentials, absolute home paths, or large media are included
 - [ ] Stable v2 and legacy fallback impact is documented
 
+## Linked TopK Issues
+
+- [ ] Each linked TopK candidate has passed `vp evolve complete`
+- [ ] Nightly Issue sync has applied `status:verified`
+- [ ] Use `Closes #<issue-number>` only after both checks above pass
+- [ ] Do not manually close a TopK Issue before the PR reaches `main`
+
 ## Rollback
 
 How can this change be disabled or reverted without modifying production media?

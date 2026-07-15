@@ -114,6 +114,13 @@ When production is idle, run:
 python3 09_tools/vp.py evolve --date YYYY-MM-DD
 ```
 
+After the nightly Loop, project the sanitized locked TopK to GitHub Issues when
+the local integration is enabled:
+
+```bash
+python3 09_tools/vp.py evolve issues sync --date YYYY-MM-DD --if-enabled
+```
+
 Rules:
 
 - Unlimited observations may arrive each day.
@@ -127,6 +134,16 @@ Rules:
 - The Loop produces candidates and reports. It does not silently edit formal
   Skills, Agents, Rules, Hooks, production scripts, or release versions.
 - Do not run the Loop while a production lock is active.
+- GitHub Issues are a public collaboration projection, not a second source of
+  truth. Every locked TopK gets one Issue, but non-public scopes use a redacted
+  title and body. Never upload evidence paths, content IDs, personal passages,
+  media, or raw production details.
+- Issue type uses `bug`, `feature`, or `other`. Effective priority uses one
+  replaceable `priority:P0` through `priority:P3` label and is recalculated
+  nightly even after the candidate leaves the next day's TopK.
+- Local completion changes the Issue to `status:verified` but does not close it.
+  A PR may use `Closes #N` only after verification; GitHub closes the Issue only
+  after that PR merges into the default branch.
 
 ### Production blockers
 
@@ -136,8 +153,8 @@ Rules:
 - Finish through cache, conservative workaround, or legacy fallback when safe.
 - After export, triage the issue. Promote only reproducible system defects into
   the next Engineering Loop.
-- The generated `生产问题清单` is local. Never publish raw production details to
-  GitHub automatically.
+- The generated `生产问题清单` is local. Every TopK may have a sanitized or
+  redacted Issue projection; never publish raw production details.
 
 ## Release Safety
 

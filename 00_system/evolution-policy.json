@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "topK": 3,
   "lookbackDays": 7,
   "repeatThreshold": 2,
@@ -19,6 +19,14 @@
       "maximumPriority": "P0",
       "p0OldestFirst": true
     }
+  },
+  "githubIssues": {
+    "enabledByDefault": false,
+    "publicScopes": ["system-core", "content-profile"],
+    "types": ["bug", "feature", "other"],
+    "priorityLabels": ["P0", "P1", "P2", "P3"],
+    "updateAgedPriorities": true,
+    "closeStrategy": "verified-linked-pr-merge-to-default"
   },
   "automation": {
     "modifyFormalRules": false,

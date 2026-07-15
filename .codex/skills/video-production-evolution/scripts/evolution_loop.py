@@ -65,7 +65,7 @@ CHANGE_TYPE_DEFAULTS = {
   },
 }
 DEFAULT_POLICY = {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "topK": 3,
   "lookbackDays": 7,
   "repeatThreshold": 2,
@@ -85,6 +85,14 @@ DEFAULT_POLICY = {
       "maximumPriority": "P0",
       "p0OldestFirst": True,
     },
+  },
+  "githubIssues": {
+    "enabledByDefault": False,
+    "publicScopes": ["system-core", "content-profile"],
+    "types": ["bug", "feature", "other"],
+    "priorityLabels": ["P0", "P1", "P2", "P3"],
+    "updateAgedPriorities": True,
+    "closeStrategy": "verified-linked-pr-merge-to-default",
   },
   "automation": {
     "modifyFormalRules": False,

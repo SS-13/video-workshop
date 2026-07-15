@@ -52,6 +52,20 @@ and prevents the completed candidate from returning in a later Loop. A
 completion becomes a Release candidate, but it does not choose a target
 version, bump a version, or change `activeRelease`.
 
+After the nightly Loop, sync the public-safe TopK projection:
+
+```bash
+python3 09_tools/vp.py evolve issues sync \
+  --date YYYY-MM-DD \
+  --if-enabled
+```
+
+Use `--dry-run` to inspect classification and privacy redactions without calling
+GitHub. The sync is idempotent by Candidate ID. It creates at most one Issue per
+candidate, applies one `type:bug|feature|other` label, and replaces the previous
+priority label as aging raises `P3 -> P2 -> P1 -> P0`. Open managed Issues keep
+aging even when they are absent from the next day's TopK.
+
 Optional TopK override:
 
 ```bash
@@ -88,6 +102,19 @@ Unselected backlog carries into later daily runs. Each elapsed calendar day rais
 - Invalid NDJSON must not overwrite the original file or the previous successful state.
 - P0 never modifies formal Skills, Rules, Hooks, Agents, production scripts, or versions.
 
+## GitHub Issue Gate
+
+- Local Evolution state and completion ledgers remain the source of truth.
+- Every TopK gets an Issue. `system-core` and `content-profile` may expose their
+  sanitized summaries; other scopes use a redacted title and body. Raw evidence
+  is never uploaded.
+- `vp evolve complete` plus the next sync changes the Issue from
+  `status:topk` to `status:verified`; sync never closes an Issue.
+- A PR that uses `Closes #N` for a TopK Issue must pass
+  `vp evolve issues check-pr --repo OWNER/REPO --pr N`.
+- GitHub closes a verified Issue only after the linked PR merges into the
+  repository default branch.
+
 ## Production Issue Loop
 
 Use the existing Observation ledger as the single source of truth for production
@@ -103,8 +130,8 @@ blocker -> Observation -> finish through stable workaround/fallback
 - After production: classify transient/input/operator/system causes.
 - Confirmed system defect: add reproducible evidence and `--promote`.
 - Existing locked TopK remains unchanged unless a P0 failure blocks Stable.
-- Keep the production issue list local by default. Public GitHub Issues require
-  sanitized content and explicit user intent.
+- Keep the raw production issue list local. Non-public TopK candidates use a
+  redacted GitHub Issue projection.
 
 ## Outputs
 

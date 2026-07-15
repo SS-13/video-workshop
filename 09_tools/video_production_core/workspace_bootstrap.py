@@ -209,6 +209,12 @@ def initialize_workspace(root: Path) -> Dict[str, Any]:
       "name": root.name,
       "systemVersion": package.get("version", "unknown"),
       "defaultContentType": system.get("defaultContentType", "video-diary"),
+      "integrations": {
+        "githubIssues": {
+          "enabled": False,
+          "repository": "",
+        },
+      },
       "createdAt": now_iso(),
     }, ensure_ascii=False, indent=2) + "\n",
     root / "00_state" / "day-counter.json": json.dumps({
@@ -427,6 +433,26 @@ def doctor_workspace(root: Path) -> Dict[str, Any]:
     and (root / "17_reports" / "evolution").is_dir()
   )
   add("daily-evolution-loop", loop_ready, True, {"topK": policy.get("topK")})
+
+  workspace_path = root / "00_state" / "workspace.json"
+  workspace = (
+    json.loads(workspace_path.read_text(encoding="utf-8"))
+    if workspace_path.is_file()
+    else {}
+  )
+  github_config = workspace.get("integrations", {}).get("githubIssues", {})
+  github_enabled = bool(github_config.get("enabled", False))
+  github_cli = find_binary("gh")
+  add(
+    "github-issues",
+    bool(github_cli) if github_enabled else True,
+    github_enabled,
+    {
+      "enabled": github_enabled,
+      "repository": github_config.get("repository", ""),
+      "cli": github_cli or "not found",
+    },
+  )
 
   ignore_path = root / ".gitignore"
   ignore_text = ignore_path.read_text(encoding="utf-8") if ignore_path.exists() else ""

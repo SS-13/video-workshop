@@ -52,6 +52,12 @@ from video_production_core.cover_workflow import (  # noqa: E402
   make_cover_pair,
   register_pencil_design,
 )
+from video_production_core.github_issue_sync import (  # noqa: E402
+  GitHubClient,
+  GitHubIssueSyncError,
+  check_pull_request_issue_gate,
+  sync_topk_issues,
+)
 from video_production_core.run_store import (  # noqa: E402
   RunStateError,
   advance_run,
@@ -187,6 +193,35 @@ def build_parser() -> argparse.ArgumentParser:
   )
   evolve_complete.add_argument("--actor", default="system-steward-agent")
   add_common_json_flag(evolve_complete)
+
+  evolve_issues = evolve_subparsers.add_parser(
+    "issues",
+    help="Project sanitized TopK work to GitHub Issues",
+  )
+  evolve_issue_subparsers = evolve_issues.add_subparsers(
+    dest="evolve_issue_action",
+    required=True,
+  )
+  evolve_issue_sync = evolve_issue_subparsers.add_parser(
+    "sync",
+    help="Create or update nightly TopK issues and dynamic priority labels",
+  )
+  evolve_issue_sync.add_argument("--date", default=today())
+  evolve_issue_sync.add_argument("--repo", help="GitHub repository as OWNER/REPO")
+  evolve_issue_sync.add_argument("--dry-run", action="store_true")
+  evolve_issue_sync.add_argument(
+    "--if-enabled",
+    action="store_true",
+    help="Exit cleanly when the local GitHub Issues integration is disabled",
+  )
+  add_common_json_flag(evolve_issue_sync)
+  evolve_issue_gate = evolve_issue_subparsers.add_parser(
+    "check-pr",
+    help="Require verified TopK issues before a PR may close them",
+  )
+  evolve_issue_gate.add_argument("--repo", required=True, help="GitHub repository as OWNER/REPO")
+  evolve_issue_gate.add_argument("--pr", type=int, required=True, help="Pull request number")
+  add_common_json_flag(evolve_issue_gate)
 
   system = subparsers.add_parser("system", help="Inspect the generic control plane")
   system_subparsers = system.add_subparsers(dest="system_action", required=True)
@@ -545,6 +580,55 @@ def handle_evolve_complete(root: Path, args: argparse.Namespace) -> int:
     print(f"completion_record={result['completionRecord']}")
     print(f"reused={str(result['reused']).lower()}")
   return 0
+
+
+def handle_evolve_issues(root: Path, args: argparse.Namespace) -> int:
+  if args.evolve_issue_action == "sync":
+    result = sync_topk_issues(
+      root,
+      args.date,
+      repository=args.repo,
+      dry_run=args.dry_run,
+      if_enabled=args.if_enabled,
+    )
+    if args.json:
+      print_json(json_envelope(root, result))
+    else:
+      print(f"date={result['date']}")
+      print(f"enabled={str(result['enabled']).lower()}")
+      print(f"skipped={str(result['skipped']).lower()}")
+      if result.get("repository"):
+        print(f"repository={result['repository']}")
+      if result.get("reason"):
+        print(f"reason={result['reason']}")
+      print(f"created={len(result['created'])}")
+      print(f"updated={len(result['updated'])}")
+      print(f"unchanged={len(result['unchanged'])}")
+      print(f"closed={len(result['closed'])}")
+      print(f"privacy_skipped={len(result['privacySkipped'])}")
+      print(f"privacy_redacted={len(result['privacyRedacted'])}")
+      for item in [*result["created"], *result["updated"]]:
+        print(
+          f"issue={item.get('number', '')}\t{item['candidateId']}\t"
+          f"{item['issueType']}\t{item['priority']}\t{item.get('url', '')}"
+        )
+    return 0
+
+  if args.evolve_issue_action == "check-pr":
+    result = check_pull_request_issue_gate(GitHubClient(args.repo), args.pr)
+    if args.json:
+      print_json(json_envelope(root, result))
+    else:
+      print(f"valid={str(result['valid']).lower()}")
+      print(f"pull_number={result['pullNumber']}")
+      print(f"base_branch={result['baseBranch']}")
+      print(f"default_branch={result['defaultBranch']}")
+      print(f"checked_topk_issues={len(result['checkedTopKIssues'])}")
+      for violation in result["violations"]:
+        print(f"violation={violation}")
+    return 0 if result["valid"] else 2
+
+  raise GitHubIssueSyncError(f"Unknown evolve issues action: {args.evolve_issue_action}")
 
 
 def handle_system(root: Path, args: argparse.Namespace) -> int:
@@ -1061,6 +1145,8 @@ def main(argv: Optional[list] = None) -> int:
       return handle_observe(root, args)
     if args.command == "evolve" and args.evolve_action == "complete":
       return handle_evolve_complete(root, args)
+    if args.command == "evolve" and args.evolve_action == "issues":
+      return handle_evolve_issues(root, args)
     if args.command == "evolve":
       return handle_evolve(root, args)
     if args.command == "system" and args.system_action == "info":
@@ -1130,6 +1216,10 @@ def main(argv: Optional[list] = None) -> int:
     return 3
   except CoverWorkflowError as error:
     payload = error_envelope("COVER_WORKFLOW_ERROR", str(error))
+    print_json(payload)
+    return 3
+  except GitHubIssueSyncError as error:
+    payload = error_envelope("GITHUB_ISSUE_SYNC_ERROR", str(error))
     print_json(payload)
     return 3
   except (EvolutionError, RootDiscoveryError, OSError, json.JSONDecodeError) as error:

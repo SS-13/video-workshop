@@ -296,12 +296,22 @@ python3 09_tools/vp.py evolve complete CAND-xxxxxxxxxxxx \
   --date YYYY-MM-DD \
   --change-type feature \
   --evidence path/to/test-report.md
+python3 09_tools/vp.py evolve issues sync \
+  --date YYYY-MM-DD \
+  --if-enabled
 ```
 
 All observations are retained. At most three enter the first locked TopK for a
 day. Verified completions enter an append-only local ledger and become unassigned
 Release candidates; they do not bump or activate a version. The implementation,
 contract, tests, and CLI are public, while real completion evidence remains local.
+
+The optional nightly GitHub projection creates one Issue per TopK candidate.
+Public-safe summaries become the title without a TopK prefix; private scopes use
+a redacted projection. Labels classify `bug`, `feature`, or `other`; the single priority
+label is replaced as aging raises `P3 -> P2 -> P1 -> P0`. Local completion sets
+`status:verified` but never closes the Issue. A linked PR uses `Closes #N`, and
+GitHub closes it only after the verified PR merges into the default branch.
 
 ## Optional Integrations
 

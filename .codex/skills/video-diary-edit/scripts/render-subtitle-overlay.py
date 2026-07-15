@@ -2,6 +2,8 @@ from pathlib import Path
 import argparse
 import subprocess
 
+from workflow_state import content_media_dir
+
 
 DEFAULT_CRF = "18"
 DEFAULT_PRESET = "veryfast"
@@ -24,8 +26,9 @@ def run_command(command):
   return result
 
 
-def find_default_input(root, date):
-  manifest_path = root / "04_videos" / date / "preprocessed" / "preprocess_manifest.json"
+def find_default_input(root, date, content_type="video-diary", sequence="001"):
+  workspace = content_media_dir(root, "04_videos", date, content_type, sequence)
+  manifest_path = workspace / "preprocessed" / "preprocess_manifest.json"
   if manifest_path.exists():
     import json
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -34,7 +37,7 @@ def find_default_input(root, date):
     if len(usable_inputs) == 1:
       return Path(usable_inputs[0])
 
-  export_dir = root / "05_exports" / date
+  export_dir = content_media_dir(root, "05_exports", date, content_type, sequence)
   if export_dir.exists():
     candidates = sorted(
       [
@@ -119,6 +122,8 @@ def burn_overlay(input_path, overlay_path, output_path, crf, preset, duration):
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("--date", required=True)
+  parser.add_argument("--content-type", "--column", dest="content_type", default="video-diary")
+  parser.add_argument("--sequence", default="001")
   parser.add_argument("--input")
   parser.add_argument("--output", required=True)
   parser.add_argument("--concat-input")
@@ -131,11 +136,14 @@ def main():
   args = parser.parse_args()
 
   root = Path.cwd()
-  input_path = resolve_path(root, args.input) if args.input else find_default_input(root, args.date)
+  workspace = content_media_dir(root, "04_videos", args.date, args.content_type, args.sequence)
+  input_path = resolve_path(root, args.input) if args.input else find_default_input(
+    root, args.date, args.content_type, args.sequence
+  )
   concat_path = (
     resolve_path(root, args.concat_input)
     if args.concat_input
-    else root / "04_videos" / args.date / "subtitles" / f"{args.date}_overlay_concat.txt"
+    else workspace / "subtitles" / f"{args.date}_overlay_concat.txt"
   )
   if not concat_path.exists():
     raise SystemExit(f"Missing subtitle concat file: {concat_path}")
@@ -146,7 +154,7 @@ def main():
   overlay_path = (
     resolve_path(root, args.overlay_output)
     if args.overlay_output
-    else root / "04_videos" / args.date / "subtitles" / f"{stem}_subtitle_overlay.mov"
+    else workspace / "subtitles" / f"{stem}_subtitle_overlay.mov"
   )
   output_path = resolve_path(root, args.output)
 

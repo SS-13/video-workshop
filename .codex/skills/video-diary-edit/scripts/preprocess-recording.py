@@ -5,7 +5,7 @@ import os
 import re
 import subprocess
 
-from workflow_state import file_fingerprint
+from workflow_state import content_media_dir, file_fingerprint
 
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".MP4", ".MOV", ".M4V"}
@@ -20,8 +20,8 @@ def natural_key(path):
   return path.name.lower()
 
 
-def find_recordings(root, date):
-  recording_dir = root / "03_recordings" / date
+def find_recordings(root, date, content_type="video-diary", sequence="001"):
+  recording_dir = content_media_dir(root, "03_recordings", date, content_type, sequence)
   if not recording_dir.exists():
     raise SystemExit(f"Missing recording directory: {recording_dir}")
 
@@ -218,8 +218,8 @@ def preprocess_one(
   return report
 
 
-def write_manifest(root, date, reports):
-  manifest_path = root / "04_videos" / date / "preprocessed" / "preprocess_manifest.json"
+def write_manifest(root, date, reports, content_type="video-diary", sequence="001"):
+  manifest_path = content_media_dir(root, "04_videos", date, content_type, sequence) / "preprocessed" / "preprocess_manifest.json"
   manifest = {
     "date": date,
     "processedCount": len(reports),
@@ -243,6 +243,8 @@ def print_report(report, report_path):
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("--date", required=True)
+  parser.add_argument("--content-type", "--column", dest="content_type", default="video-diary")
+  parser.add_argument("--sequence", default="001")
   parser.add_argument("--input")
   parser.add_argument("--output")
   parser.add_argument("--report")
@@ -260,9 +262,10 @@ def main():
       raise SystemExit("--all cannot be used with --input, --output, or --report.")
 
     reports = []
-    for input_path in find_recordings(root, args.date):
-      output_path = root / "04_videos" / args.date / "preprocessed" / f"{input_path.stem}_trimmed.mp4"
-      report_path = root / "04_videos" / args.date / "preprocessed" / f"{input_path.stem}_preprocess_report.json"
+    workspace = content_media_dir(root, "04_videos", args.date, args.content_type, args.sequence)
+    for input_path in find_recordings(root, args.date, args.content_type, args.sequence):
+      output_path = workspace / "preprocessed" / f"{input_path.stem}_trimmed.mp4"
+      report_path = workspace / "preprocessed" / f"{input_path.stem}_preprocess_report.json"
       report = preprocess_one(
         input_path,
         output_path,
@@ -276,7 +279,7 @@ def main():
       print_report(report, report_path)
       print("")
 
-    manifest_path = write_manifest(root, args.date, reports)
+    manifest_path = write_manifest(root, args.date, reports, args.content_type, args.sequence)
     trimmed_count = sum(1 for report in reports if report["trimmed"])
     print(f"processed={len(reports)}")
     print(f"trimmed_count={trimmed_count}")
@@ -288,13 +291,13 @@ def main():
     input_path = root / input_path
 
   output_path = Path(args.output) if args.output else (
-    root / "04_videos" / args.date / "preprocessed" / f"{input_path.stem}_trimmed.mp4"
+    content_media_dir(root, "04_videos", args.date, args.content_type, args.sequence) / "preprocessed" / f"{input_path.stem}_trimmed.mp4"
   )
   if not output_path.is_absolute():
     output_path = root / output_path
 
   report_path = Path(args.report) if args.report else (
-    root / "04_videos" / args.date / "preprocessed" / f"{input_path.stem}_preprocess_report.json"
+    content_media_dir(root, "04_videos", args.date, args.content_type, args.sequence) / "preprocessed" / f"{input_path.stem}_preprocess_report.json"
   )
   if not report_path.is_absolute():
     report_path = root / report_path

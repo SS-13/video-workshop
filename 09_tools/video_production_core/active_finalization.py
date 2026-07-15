@@ -10,6 +10,7 @@ import re
 from video_production_core.canary_adoption import finalize_prepared_run, require_file
 from video_production_core.contracts import load_json, validate_value
 from video_production_core.run_store import RunStateError, validate_run
+from video_production_core.content_layout import ContentRef
 
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -54,6 +55,7 @@ def finalize_active_run(
   script_path: Optional[str] = None,
   recording_path: Optional[str] = None,
   actor: str = "video-agent",
+  sequence: str = "001",
 ) -> Dict[str, Any]:
   root = root.resolve()
   status = active_run_state_status(root)
@@ -70,7 +72,10 @@ def finalize_active_run(
 
   package_path = require_file(
     root,
-    publish_package_path or f"05_exports/{date}/publish-package.json",
+    publish_package_path or str(
+      ContentRef(date, content_type, sequence).media_dir(root, "05_exports")
+      / "publish-package.json"
+    ),
     "publish package",
   )
   try:
@@ -98,6 +103,7 @@ def finalize_active_run(
     script_path=script_path,
     recording_path=recording_path,
     actor=actor,
+    sequence=sequence,
   )
   run = finalized["run"]
   validation = validate_run(root, run["id"])

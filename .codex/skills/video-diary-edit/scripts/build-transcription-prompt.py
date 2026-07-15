@@ -3,6 +3,8 @@ import argparse
 import csv
 import re
 
+from workflow_state import content_text_path
+
 
 DEFAULT_MAX_TERMS = 30
 DEFAULT_MAX_SCRIPT_CHARS = 220
@@ -49,13 +51,15 @@ def unique_terms(values):
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("--date", required=True)
+  parser.add_argument("--content-type", "--column", dest="content_type", default="video-diary")
+  parser.add_argument("--sequence", default="001")
   parser.add_argument("--output", required=True)
   parser.add_argument("--max-terms", type=int, default=DEFAULT_MAX_TERMS)
   parser.add_argument("--max-script-chars", type=int, default=DEFAULT_MAX_SCRIPT_CHARS)
   args = parser.parse_args()
 
   root = Path.cwd()
-  script_path = root / "02_scripts" / f"{args.date}.md"
+  script_path = content_text_path(root, "02_scripts", args.date, args.content_type, args.sequence)
   output_path = Path(args.output)
   if not output_path.is_absolute():
     output_path = root / output_path

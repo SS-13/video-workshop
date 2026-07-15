@@ -2,7 +2,7 @@ from pathlib import Path
 import argparse
 import json
 
-from workflow_state import load_job, save_job
+from workflow_state import content_media_dir, load_job, save_job
 
 
 def relative(root, value):
@@ -18,12 +18,16 @@ def relative(root, value):
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("--date", required=True)
+  parser.add_argument("--content-type", "--column", dest="content_type", default="video-diary")
+  parser.add_argument("--sequence", default="001")
   parser.add_argument("--output")
   args = parser.parse_args()
 
   root = Path.cwd()
-  job = load_job(root, args.date)
-  output_path = Path(args.output) if args.output else root / "04_videos" / args.date / "REVIEW.md"
+  job = load_job(root, args.date, args.content_type, args.sequence)
+  output_path = Path(args.output) if args.output else (
+    content_media_dir(root, "04_videos", args.date, args.content_type, args.sequence) / "REVIEW.md"
+  )
   if not output_path.is_absolute():
     output_path = root / output_path
 
@@ -89,7 +93,7 @@ def main():
   output_path.write_text("\n".join(rows).rstrip() + "\n", encoding="utf-8")
   job["status"] = "awaiting_review"
   job.setdefault("artifacts", {})["reviewPack"] = str(output_path)
-  save_job(root, args.date, job)
+  save_job(root, args.date, job, args.content_type, args.sequence)
 
   print(f"review_pack={output_path}")
   print(f"status={job['status']}")

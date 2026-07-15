@@ -19,6 +19,7 @@ from video_production_core.run_store import (
   start_run,
   validate_run_id,
 )
+from video_production_core.content_layout import ContentRef
 
 
 MIME_TYPES = {
@@ -72,17 +73,29 @@ def production_path(root: Path, path: Path, expected_root: str, label: str) -> N
     raise RunStateError(f"{label} is not a real production artifact: {relative}")
 
 
-def optional_script(root: Path, date: str, explicit: Optional[str]) -> Optional[Path]:
+def optional_script(
+  root: Path,
+  date: str,
+  explicit: Optional[str],
+  content_type: str = "video-diary",
+  sequence: str = "001",
+) -> Optional[Path]:
   if explicit:
     return require_file(root, explicit, "script")
-  candidate = root / "02_scripts" / f"{date}.md"
+  candidate = ContentRef(date, content_type, sequence).text_path(root, "02_scripts")
   return candidate.resolve() if candidate.is_file() else None
 
 
-def optional_recording(root: Path, date: str, explicit: Optional[str]) -> Optional[Path]:
+def optional_recording(
+  root: Path,
+  date: str,
+  explicit: Optional[str],
+  content_type: str = "video-diary",
+  sequence: str = "001",
+) -> Optional[Path]:
   if explicit:
     return require_file(root, explicit, "recording")
-  directory = root / "03_recordings" / date
+  directory = ContentRef(date, content_type, sequence).media_dir(root, "03_recordings")
   if not directory.exists():
     return None
   candidates = [
@@ -159,6 +172,7 @@ def finalize_prepared_run(
   script_path: Optional[str],
   recording_path: Optional[str],
   actor: str,
+  sequence: str = "001",
 ) -> Dict[str, Any]:
   if package.get("publishReady") is not True:
     raise RunStateError("Run finalization requires publishReady=true.")
@@ -186,8 +200,8 @@ def finalize_prepared_run(
   production_path(root, cover_4x3, "05_exports", "4:3 cover")
   production_path(root, srt, "04_videos", "Corrected SRT")
 
-  script = optional_script(root, date, script_path)
-  recording = optional_recording(root, date, recording_path)
+  script = optional_script(root, date, script_path, content_type, sequence)
+  recording = optional_recording(root, date, recording_path, content_type, sequence)
   publish_markdown = package_path.parent / "PUBLISH.md"
   run = start_run(
     root,
@@ -197,6 +211,7 @@ def finalize_prepared_run(
     run_id=run_id,
     channel=channel,
     actor=actor,
+    sequence=sequence,
   )
   if run.get("reused") and run.get("currentStage") == "completed":
     return {"run": run, "productionStats": stats, "reused": True}
@@ -279,11 +294,15 @@ def adopt_canary_run(
   script_path: Optional[str] = None,
   recording_path: Optional[str] = None,
   actor: str = "system-steward-agent",
+  sequence: str = "001",
 ) -> Dict[str, Any]:
   root = root.resolve()
   package_path = require_file(
     root,
-    publish_package_path or f"05_exports/{date}/publish-package.json",
+    publish_package_path or str(
+      ContentRef(date, content_type, sequence).media_dir(root, "05_exports")
+      / "publish-package.json"
+    ),
     "publish package",
   )
   package = json.loads(package_path.read_text(encoding="utf-8"))
@@ -353,6 +372,7 @@ def adopt_canary_run(
     script_path=script_path,
     recording_path=recording_path,
     actor=actor,
+    sequence=sequence,
   )
   run = finalized["run"]
   validation = validate_real_canary(root, run_id)

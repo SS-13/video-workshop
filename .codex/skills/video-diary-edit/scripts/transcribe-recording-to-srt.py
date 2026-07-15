@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import wave
 
-from workflow_state import file_fingerprint, value_fingerprint
+from workflow_state import content_media_dir, file_fingerprint, value_fingerprint
 
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".MP4", ".MOV", ".M4V"}
@@ -22,8 +22,8 @@ def natural_key(path):
   return path.name.lower()
 
 
-def find_default_input(root, date):
-  recording_dir = root / "03_recordings" / date
+def find_default_input(root, date, content_type="video-diary", sequence="001"):
+  recording_dir = content_media_dir(root, "03_recordings", date, content_type, sequence)
   if not recording_dir.exists():
     raise SystemExit(f"Missing recording directory: {recording_dir}")
 
@@ -344,6 +344,8 @@ def run_word_json(
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("--date", required=True)
+  parser.add_argument("--content-type", "--column", dest="content_type", default="video-diary")
+  parser.add_argument("--sequence", default="001")
   parser.add_argument("--input")
   parser.add_argument("--output")
   parser.add_argument("--json-output")
@@ -359,9 +361,12 @@ def main():
   args = parser.parse_args()
 
   root = Path.cwd()
-  input_path = resolve_path(root, args.input) if args.input else find_default_input(root, args.date)
+  input_path = resolve_path(root, args.input) if args.input else find_default_input(
+    root, args.date, args.content_type, args.sequence
+  )
   output_path = resolve_path(root, args.output) if args.output else (
-    root / "04_videos" / args.date / "subtitles" / f"{args.date}_transcribed.srt"
+    content_media_dir(root, "04_videos", args.date, args.content_type, args.sequence)
+    / "subtitles" / f"{args.date}_transcribed.srt"
   )
 
   if not args.word_timestamps and not args.json_output and not args.audio_cache:

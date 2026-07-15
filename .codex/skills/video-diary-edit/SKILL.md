@@ -7,7 +7,7 @@ description: Edit and export a video diary MP4 in Video Workshop. Use when the u
 
 ## Core Rule
 
-Produce the publish pack in the matching export folder. For `视频日记`, keep the current stable path `05_exports/YYYY-MM-DD/`. For other columns, use the column-first path described below. Default edit is: trim terminal black screen/watermark, add accurate subtitles, no BGM, no brightness/quality enhancement unless explicitly requested.
+Produce the publish pack in `05_exports/YYYY-MM-DD/<content-type>/<sequence>/`. Default edit is: trim terminal black screen/watermark, add accurate subtitles, no BGM, no brightness/quality enhancement unless explicitly requested.
 
 If the user does not explicitly name `碎碎念` or `读书笔记`, treat the edit as `video-diary`.
 
@@ -15,11 +15,11 @@ First principle: content is the product. Editing must prioritize accurate spoken
 
 Subtitle timing is owned by the real audio transcript, not by visual taste. Do not retime subtitle blocks to make captions read prettier. Correct words first, keep the source timing, and only split text inside the original cue window.
 
-The standard production order after upload is cover and SRT first, one combined review gate, then one final render. Make the cover and corrected external SRT in parallel. Build `04_videos/YYYY-MM-DD/REVIEW.md` and hand the cover pair, review video, external SRT, uncertain transcript segments, and insert plan to the user together. Do not burn subtitles until the combined review is confirmed.
+The standard production order after upload is cover and SRT first, one combined review gate, then one final render. Make the cover and corrected external SRT in parallel. Build `04_videos/YYYY-MM-DD/<content-type>/<sequence>/REVIEW.md` and hand the cover pair, review video, external SRT, uncertain transcript segments, and insert plan to the user together. Do not burn subtitles until the combined review is confirmed.
 
 If the matching final cover has not been confirmed yet, full final rendering still waits. Minimal recording inspection, terminal-tail preprocessing, transcription, dictionary correction, and SRT timing checks may happen in parallel with cover work because they do not write the final MP4.
 
-The default `video-diary` engine is `v2`: tail scan once, extract/cache audio once, transcribe once with word timestamps and project vocabulary, correct/check SRT, stop at the combined review gate, then render once after confirmation. Each v2 job stores its source fingerprint, style versions, artifacts, and stage state in `04_videos/YYYY-MM-DD/job.json` so reruns resume from verified artifacts.
+The default `video-diary` engine is `v2`: tail scan once, extract/cache audio once, transcribe once with word timestamps and project vocabulary, correct/check SRT, stop at the combined review gate, then render once after confirmation. Each v2 job stores its source fingerprint, style versions, artifacts, and stage state in the matching `04_videos/YYYY-MM-DD/<content-type>/<sequence>/job.json`.
 
 Keep the previous deterministic engine available as `legacy`. Do not delete or silently rewrite it. `polished` mode and non-default column paths automatically fall back to `legacy` until their v2 migration is explicitly completed.
 
@@ -63,14 +63,14 @@ If the user wants the cover visible inside the video, prepend the confirmed cove
 Required:
 
 ```text
-02_scripts/YYYY-MM-DD.md
-03_recordings/YYYY-MM-DD/
+02_scripts/YYYY-MM-DD/<content-type>/<sequence>.md
+03_recordings/YYYY-MM-DD/<content-type>/<sequence>/
 ```
 
 Output:
 
 ```text
-05_exports/YYYY-MM-DD/YYYY-MM-DD_DayNN_video-diary.mp4
+05_exports/YYYY-MM-DD/video-diary/001/YYYY-MM-DD_DayNN_video-diary.mp4
 ```
 
 ## Column Paths
@@ -80,21 +80,21 @@ Default column is `video-diary`. Other columns are opt-in only.
 `视频日记` keeps the original date-first path because Day numbering belongs only to the diary series:
 
 ```text
-03_recordings/YYYY-MM-DD/
-04_videos/YYYY-MM-DD/
-05_exports/YYYY-MM-DD/
+03_recordings/YYYY-MM-DD/<content-type>/<sequence>/
+04_videos/YYYY-MM-DD/<content-type>/<sequence>/
+05_exports/YYYY-MM-DD/<content-type>/<sequence>/
 ```
 
-For `碎碎念` and `读书笔记`, use a column-first clip id so multiple videos on the same day do not collide with the Day-numbered diary:
+For `碎碎念` and `读书笔记`, use the same date-first key and increment only the sequence:
 
 ```text
 03_recordings/suisuinian/YYYY-MM-DD_001/
 04_videos/suisuinian/YYYY-MM-DD_001/
-05_exports/suisuinian/YYYY-MM-DD_001/
+05_exports/YYYY-MM-DD/suisuinian/001/
 
 03_recordings/reading-note/YYYY-MM-DD_001/
 04_videos/reading-note/YYYY-MM-DD_001/
-05_exports/reading-note/YYYY-MM-DD_001/
+05_exports/YYYY-MM-DD/reading-note/001/
 ```
 
 Use `_001`, `_002` when one column has multiple uploads on the same date. Do not increment the `视频日记` Day number for `碎碎念` or `读书笔记`.
@@ -172,7 +172,7 @@ Then transcribe the clean spoken-video file:
 python3 .codex/skills/video-diary-edit/scripts/transcribe-recording-to-srt.py --date YYYY-MM-DD --input CLEAN_SPOKEN_VIDEO --output RAW_SRT --model tiny --language Chinese
 ```
 
-`02_scripts/YYYY-MM-DD.md` is not the subtitle source of truth. The speaker may add, delete, reorder, or rephrase during recording. Treat the real recording as authoritative for subtitle wording and timing. The script may only help with homophone correction, segment labeling, and intent recovery when the audio is unclear.
+The matching Script file is not the subtitle source of truth. The speaker may add, delete, reorder, or rephrase during recording. Treat the real recording as authoritative for subtitle wording and timing.
 
 7. Correct subtitles and record the subtitle correction checkpoint. Use `scripts/correct-transcript.py` and/or write a corrected SRT. Required corrections include product names, technical terms, book/movie names, obvious homophones, and any places where the speaker diverged from the script. Check the project-maintained keyword library first:
 
@@ -245,7 +245,7 @@ Every static image input must be bounded by the real output duration (`-t DURATI
 12. Promote the final MP4 and record stats with the fixed script. `--date` is the content date. `--started-at` / `--finished-at` are production timestamps and may fall on a later calendar day:
 
 ```bash
-python3 .codex/skills/video-diary-edit/scripts/promote-final.py --date YYYY-MM-DD --input 04_videos/YYYY-MM-DD/FINAL.mp4 --cover 05_exports/YYYY-MM-DD/COVER.jpg --day-label "Day NN" --title "TITLE" --started-at "YYYY-MM-DD HH:MM" --finished-at "YYYY-MM-DD HH:MM"
+python3 .codex/skills/video-diary-edit/scripts/promote-final.py --date YYYY-MM-DD --content-type video-diary --sequence 001 --input 04_videos/YYYY-MM-DD/video-diary/001/FINAL.mp4 --cover 05_exports/YYYY-MM-DD/video-diary/001/COVER.jpg --day-label "Day NN" --title "TITLE" --started-at "YYYY-MM-DD HH:MM" --finished-at "YYYY-MM-DD HH:MM"
 ```
 
 Record `column`, `视频时长`, `制作视频总用时`, and final export file size immediately through `video-diary-log` / `00_state/production-stats.csv`. These fields are mandatory monthly review inputs and must be captured during production, because old media files may be deleted later.
@@ -256,7 +256,7 @@ When an Active 3.x Release is present, `publish:package` automatically finalizes
 
 ## Stage Timing Checkpoints
 
-Record these checkpoints in `06_logs/YYYY-MM-DD.md` during production:
+Record these checkpoints in `06_logs/YYYY-MM-DD/<content-type>/<sequence>.md` during production:
 
 ```text
 SRT 导出：start / finish / elapsed / output path

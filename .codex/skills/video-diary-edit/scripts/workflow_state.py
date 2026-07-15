@@ -3,10 +3,17 @@ from datetime import datetime
 import hashlib
 import json
 import os
+import sys
 import tempfile
 
 
-JOB_SCHEMA_VERSION = 2
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(PROJECT_ROOT / "09_tools"))
+
+from video_production_core.content_layout import ContentRef  # noqa: E402
+
+
+JOB_SCHEMA_VERSION = 3
 FINGERPRINT_SAMPLE_BYTES = 1024 * 1024
 
 
@@ -53,16 +60,34 @@ def stage_cache_key(inputs, params=None):
   return value_fingerprint({"inputs": normalized_inputs, "params": params or {}})
 
 
-def job_path(root, date):
-  return Path(root) / "04_videos" / date / "job.json"
+def content_ref(date, content_type="video-diary", sequence="001"):
+  return ContentRef(date, content_type, sequence)
 
 
-def new_job(date, column):
+def content_workspace(root, date, content_type="video-diary", sequence="001"):
+  return content_ref(date, content_type, sequence).media_dir(Path(root), "04_videos")
+
+
+def content_text_path(root, stage, date, content_type="video-diary", sequence="001"):
+  return content_ref(date, content_type, sequence).text_path(Path(root), stage)
+
+
+def content_media_dir(root, stage, date, content_type="video-diary", sequence="001"):
+  return content_ref(date, content_type, sequence).media_dir(Path(root), stage)
+
+
+def job_path(root, date, content_type="video-diary", sequence="001"):
+  return content_workspace(root, date, content_type, sequence) / "job.json"
+
+
+def new_job(date, content_type, sequence="001"):
   timestamp = now_iso()
   return {
     "schemaVersion": JOB_SCHEMA_VERSION,
     "date": date,
-    "column": column,
+    "contentType": content_type,
+    "column": content_type,
+    "sequence": content_ref(date, content_type, sequence).sequence,
     "engine": "v2",
     "status": "created",
     "createdAt": timestamp,
@@ -80,14 +105,16 @@ def new_job(date, column):
   }
 
 
-def load_job(root, date, column="video-diary"):
-  path = job_path(root, date)
+def load_job(root, date, content_type="video-diary", sequence="001"):
+  path = job_path(root, date, content_type, sequence)
   if not path.exists():
-    return new_job(date, column)
+    return new_job(date, content_type, sequence)
 
   data = json.loads(path.read_text(encoding="utf-8"))
   data.setdefault("schemaVersion", JOB_SCHEMA_VERSION)
-  data.setdefault("column", column)
+  data.setdefault("contentType", content_type)
+  data.setdefault("column", content_type)
+  data.setdefault("sequence", content_ref(date, content_type, sequence).sequence)
   data.setdefault("engine", "v2")
   data.setdefault("status", "created")
   data.setdefault("source", {})
@@ -100,10 +127,15 @@ def load_job(root, date, column="video-diary"):
   return data
 
 
-def save_job(root, date, job):
-  path = job_path(root, date)
+def save_job(root, date, job, content_type=None, sequence=None):
+  resolved_content_type = content_type or job.get("contentType") or job.get("column", "video-diary")
+  resolved_sequence = sequence or job.get("sequence", "001")
+  path = job_path(root, date, resolved_content_type, resolved_sequence)
   path.parent.mkdir(parents=True, exist_ok=True)
   job["schemaVersion"] = JOB_SCHEMA_VERSION
+  job["contentType"] = resolved_content_type
+  job["column"] = resolved_content_type
+  job["sequence"] = content_ref(date, resolved_content_type, resolved_sequence).sequence
   job["updatedAt"] = now_iso()
 
   descriptor, temp_name = tempfile.mkstemp(prefix="job-", suffix=".json", dir=str(path.parent))

@@ -393,6 +393,27 @@ class GitHubIssueSyncTest(unittest.TestCase):
     self.assertTrue(any("Ready for review" in item for item in result["violations"]))
     self.assertTrue(any("not green" in item for item in result["violations"]))
 
+  def test_merge_gate_blocks_unchecked_canary_gate(self):
+    issue = {
+      "number": 7,
+      "title": "Verified repair",
+      "body": "",
+      "labels": [{"name": "topk"}, {"name": "status:verified"}],
+      "state": "open",
+      "html_url": "https://github.com/example/video-workshop/issues/7",
+    }
+    client = FakeGitHubClient(
+      [issue],
+      pull_body="Closes #7\n- [ ] One real PR HEAD video Canary is recorded",
+      checks={"status": "success", "checks": [{"name": "test", "state": "SUCCESS"}]},
+    )
+
+    result = check_pull_request_merge_gate(client, 12)
+
+    self.assertFalse(result["valid"])
+    self.assertEqual(len(result["uncheckedCanaryGates"]), 1)
+    self.assertTrue(any("unchecked Canary" in item for item in result["violations"]))
+
   def test_work_packet_resolves_issue_and_completion_command(self):
     target = "2030-01-01"
     candidate_id = "CAND-start000001"

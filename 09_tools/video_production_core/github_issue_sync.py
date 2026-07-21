@@ -22,6 +22,9 @@ CLOSING_PATTERN = re.compile(
   re.IGNORECASE,
 )
 TOPK_FIX_MARKER = "<!-- video-workshop-topk-fix -->"
+UNCHECKED_CANARY_PATTERN = re.compile(
+  r"(?im)^\s*-\s*\[\s\]\s+.*\bcanary\b.*$"
+)
 REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 MANAGED_LABEL_PREFIXES = ("priority:", "type:", "status:")
 PRIVATE_PATTERNS = [
@@ -974,6 +977,11 @@ def check_pull_request_merge_gate(
     violations.append(f"TopK repair PRs must target the default branch: {default_branch}.")
   if bool(pull.get("draft", False)):
     violations.append("TopK repair PR must be marked Ready for review before merge.")
+  unchecked_canary = UNCHECKED_CANARY_PATTERN.findall(str(pull.get("body", "")))
+  if unchecked_canary:
+    violations.append(
+      "PR still has an unchecked Canary gate; record real Canary evidence before merge."
+    )
   checks = client.get_pull_request_checks(pull_number)
   if checks.get("status") != "success":
     violations.append(
@@ -983,5 +991,6 @@ def check_pull_request_merge_gate(
     **issue_gate,
     "valid": not violations,
     "checks": checks,
+    "uncheckedCanaryGates": unchecked_canary,
     "violations": violations,
   }

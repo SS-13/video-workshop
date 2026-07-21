@@ -8,6 +8,8 @@ It decouples long-term workflow state from daily folders and large media files:
 - `content-ledger.csv`: one row per content item across columns.
 - `production-stats.csv`: production cost metrics recorded after final export.
 - `publish-ledger.csv`: publish metadata copied from the legacy log ledger.
+- `media-retention-ledger.csv`: append-only audit row for each exact video path
+  deleted by the explicitly enabled retention runner.
 - `observations/`: append-only updates from Codex, CLI, users, validators, and audits.
 - `evolution/`: deterministic daily TopK selection, candidate backlog, and local completion ledger.
 - `runs/`: generic 3.0 production run state, one `run.json` per content item.

@@ -397,10 +397,16 @@ const appendRawIdea = async (record, options) => {
   if (existing.includes(marker)) {
     return { date, title, raw, topic, localPath, changed: false };
   }
+  const attributedExisting = existing.replace(
+    /^-\s*灵感来源：待确认\s*$/m,
+    "- 灵感来源：生活输入"
+  );
 
   const block = [
     buildTopicHeading(topic.number),
     `- 时间：${new Date().toLocaleString("zh-CN", { hour12: false })}`,
+    "- 灵感来源：生活输入",
+    "- Sparkling ID：-",
     "- 原始口述：",
     "",
     marker,
@@ -423,10 +429,10 @@ const appendRawIdea = async (record, options) => {
 
   const topicHeadingRe = new RegExp(`^##\\s+话题\\s+${topic.number}\\b.*$`, "m");
   const nextTopicRe = /^##\s+话题\s+\d+\b.*$/m;
-  const range = findSectionRange(existing, topicHeadingRe, nextTopicRe);
+  const range = findSectionRange(attributedExisting, topicHeadingRe, nextTopicRe);
   const nextContent = range
-    ? replaceSection(existing, range, block)
-    : `${existing.trimEnd()}\n\n${block}\n`;
+    ? replaceSection(attributedExisting, range, block)
+    : `${attributedExisting.trimEnd()}\n\n${block}\n`;
 
   await writeFile(inboxPath, nextContent);
   return { date, title, raw, topic, localPath, changed: true };

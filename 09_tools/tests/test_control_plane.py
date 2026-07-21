@@ -1,4 +1,5 @@
 from pathlib import Path
+import csv
 import json
 import shutil
 import subprocess
@@ -1150,6 +1151,29 @@ class CanaryValidationTest(unittest.TestCase):
         "2.1.0",
       )
       self.assertTrue((root / "00_state" / "runs" / run_id / "run.json").exists())
+
+  def test_active_finalization_closes_content_ledger_idempotently(self):
+    with tempfile.TemporaryDirectory() as directory:
+      root = Path(directory)
+      run_id, manifest_path = self.make_canary_workspace(root, write_run=False)
+      manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+      manifest["gates"]["realVideoCanary"] = "pass"
+      manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+      activated = activate_release(root, confirm=True, actor="test")
+      self.assertTrue(activated["changed"])
+
+      first = finalize_active_run(root, date="2026-07-13", actor="test")
+      second = finalize_active_run(root, date="2026-07-13", actor="test")
+      with (root / "00_state" / "content-ledger.csv").open(encoding="utf-8") as file:
+        rows = list(csv.DictReader(file))
+      row = next(item for item in rows if item["content_id"] == run_id)
+
+      self.assertTrue(first["contentLedger"]["changed"])
+      self.assertFalse(second["contentLedger"]["changed"])
+      self.assertEqual(row["status"], "exported")
+      self.assertEqual(row["title"], "Canary")
+      self.assertTrue(row["export_ref"].endswith("final.mp4"))
 
 
 if __name__ == "__main__":

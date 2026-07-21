@@ -60,3 +60,7 @@ Not allowed:
 - deleting paths outside the project
 
 If the user asks to delete all monthly videos, generate the manifest and tell them the tool supports one explicit file at a time.
+
+This boundary applies to monthly-review commands. The daily
+`vp cleanup run --apply` retention route is a separate, explicitly enabled
+control with per-file validation and an append-only deletion ledger.

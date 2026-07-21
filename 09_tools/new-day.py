@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 import argparse
 import csv
@@ -18,6 +17,7 @@ from video_production_core.content_layout import (
   ensure_content_directories,
   next_sequence,
 )
+from video_production_core.content_date import default_content_date
 
 
 LEDGER_FIELDS = [
@@ -207,7 +207,7 @@ def update_day_counter(root: Path, ref: ContentRef, day_number: int | None, cont
 
 def main() -> int:
   parser = argparse.ArgumentParser(description="Initialize a date-first content workspace.")
-  parser.add_argument("date", nargs="?", default=datetime.now().astimezone().strftime("%Y-%m-%d"))
+  parser.add_argument("date", nargs="?", default=default_content_date())
   parser.add_argument("--content-type", "--column", choices=CONTENT_TYPES, default="video-diary")
   parser.add_argument("--sequence", default="001")
   parser.add_argument("--next", action="store_true", dest="use_next")

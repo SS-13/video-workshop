@@ -1,8 +1,15 @@
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 import argparse
+from functools import lru_cache
 import json
 import os
+
+try:
+  from fontTools.ttLib import TTCollection, TTFont
+except ImportError:  # pragma: no cover - requirements.txt installs fontTools
+  TTCollection = None
+  TTFont = None
 
 
 DEFAULT_COVER_WIDTH = 1080
@@ -166,6 +173,33 @@ def load_font(size, candidates, strict=False):
   return ImageFont.load_default()
 
 
+@lru_cache(maxsize=32)
+def font_codepoints(path, index):
+  if TTFont is None or TTCollection is None:
+    raise SystemExit("Font glyph QC requires fonttools; install requirements.txt first.")
+
+  font_path = str(path)
+  if font_path.lower().endswith(".ttc"):
+    collection = TTCollection(font_path)
+    if index >= len(collection.fonts):
+      raise SystemExit(f"Font face index {index} is unavailable: {font_path}")
+    font = collection.fonts[index]
+  else:
+    font = TTFont(font_path)
+
+  codepoints = set()
+  for table in font["cmap"].tables:
+    codepoints.update(table.cmap.keys())
+  return frozenset(codepoints)
+
+
+def missing_glyphs(font, text):
+  if not text:
+    return []
+  codepoints = font_codepoints(getattr(font, "path", ""), int(getattr(font, "index", 0)))
+  return sorted({char for char in text if not char.isspace() and ord(char) not in codepoints})
+
+
 def text_size(draw, text, font, stroke_width=0):
   left, top, right, bottom = draw.textbbox((0, 0), text, font=font, stroke_width=stroke_width)
   return right - left, bottom - top
@@ -319,10 +353,37 @@ def draw_header(draw, args, style):
 
   series_label = args.series_label or style.get("seriesLabel", "视频日记")
   x0, y0 = 58, 54
-  draw.text((x0 + 4, y0 + 5), series_label, font=label, fill=(0, 0, 0, 135), stroke_width=4, stroke_fill=(0, 0, 0, 135))
-  draw.text((x0, y0), series_label, font=label, fill=white, stroke_width=3, stroke_fill=black)
+  series_stroke = int(style.get("seriesStrokeWidth", 3))
+  series_shadow_a = int(style.get("seriesShadowAlpha", 135))
+  if series_shadow_a > 0:
+    draw.text((x0 + 4, y0 + 5), series_label, font=label, fill=(0, 0, 0, series_shadow_a), stroke_width=4 if series_stroke else 0, stroke_fill=(0, 0, 0, series_shadow_a))
+  if series_stroke > 0:
+    draw.text((x0, y0), series_label, font=label, fill=white, stroke_width=series_stroke, stroke_fill=black)
+  else:
+    draw.text((x0, y0), series_label, font=label, fill=white)
   underline_width = int(style.get("labelUnderlineWidth", 318))
-  draw.line((x0, y0 + 116, x0 + underline_width, y0 + 116), fill=(255, 255, 255, 190), width=5)
+  underline_weight = int(style.get("labelUnderlineWeight", 5))
+  underline_gap = int(style.get("labelUnderlineGap", 116))
+  draw.line((x0, y0 + underline_gap, x0 + underline_width, y0 + underline_gap), fill=(255, 255, 255, 190), width=underline_weight)
+
+  corner_label = args.corner_label or style.get("cornerLabel", "")
+  if corner_label:
+    corner_size = int(style.get("cornerLabelSize", 58))
+    corner_stroke = int(style.get("cornerLabelStrokeWidth", 0))
+    corner_shadow_a = int(style.get("cornerLabelShadowAlpha", 110))
+    corner_underline_w = int(style.get("cornerLabelUnderlineWidth", 100))
+    corner_underline_gap = int(style.get("cornerLabelUnderlineGap", 80))
+    corner_underline_wt = int(style.get("cornerLabelUnderlineWeight", 2))
+    corner_font = load_font(corner_size, META_FONTS, strict=True)
+    cl_w, _ = text_size(draw, corner_label, corner_font, corner_stroke)
+    right_x = COVER_WIDTH - 56 - cl_w
+    if corner_shadow_a > 0:
+      draw.text((right_x + 4, y0 + 5), corner_label, font=corner_font, fill=(0, 0, 0, corner_shadow_a), stroke_width=4 if corner_stroke else 0, stroke_fill=(0, 0, 0, corner_shadow_a))
+    if corner_stroke > 0:
+      draw.text((right_x, y0), corner_label, font=corner_font, fill=white, stroke_width=corner_stroke, stroke_fill=black)
+    else:
+      draw.text((right_x, y0), corner_label, font=corner_font, fill=white)
+    draw.line((right_x, y0 + corner_underline_gap, right_x + corner_underline_w, y0 + corner_underline_gap), fill=(255, 255, 255, 190), width=corner_underline_wt)
 
   meta_line_1 = args.meta_line_1 or args.date.replace("-", ".")
   right = COVER_WIDTH - 56
@@ -381,6 +442,8 @@ def render_cover(args):
     style["noteY"] = min(COVER_HEIGHT - 72, int(style.get("noteY", 1280) * 0.76))
     style["title1StartSize"] = int(style.get("title1StartSize", 190) * 0.82)
     style["title2StartSize"] = int(style.get("title2StartSize", 168) * 0.82)
+    style["title1MinSize"] = int(style.get("title1MinSize", 128) * 0.82)
+    style["title2MinSize"] = int(style.get("title2MinSize", 118) * 0.82)
     style["taglineSize"] = int(style.get("taglineSize", 48) * 0.88)
     style["seriesSize"] = int(style.get("seriesSize", 78) * 0.82)
     style["metaSize"] = int(style.get("metaSize", 44) * 0.82)
@@ -412,13 +475,29 @@ def render_cover(args):
 
   title_font_candidates = style.get("titleFonts", DISPLAY_FONTS)
   title_outline_width = int(style.get("titleOutlineWidth", 5))
-  title_1_font = fit_font(draw, title_line_1, int(style.get("title1StartSize", 224)), 128, 930, stroke_width=title_outline_width, font_candidates=title_font_candidates)
-  title_2_font = fit_font(draw, title_line_2 or "", int(style.get("title2StartSize", 202)), 118, 980, stroke_width=title_outline_width, font_candidates=title_font_candidates)
+  title_1_font = fit_font(
+    draw,
+    title_line_1,
+    int(style.get("title1StartSize", 224)),
+    int(style.get("title1MinSize", 128)),
+    930,
+    stroke_width=title_outline_width,
+    font_candidates=title_font_candidates,
+  )
+  title_2_font = fit_font(
+    draw,
+    title_line_2 or "",
+    int(style.get("title2StartSize", 202)),
+    int(style.get("title2MinSize", 118)),
+    980,
+    stroke_width=title_outline_width,
+    font_candidates=title_font_candidates,
+  )
   main_y = args.title_y if args.title_y is not None else int(style.get("titleY", 500))
   title_1_height = draw_fat_center_text(draw, title_line_1, main_y, title_1_font, style)
   title_2_height = draw_fat_center_text(draw, title_line_2 or "", main_y + title_1_height + 24, title_2_font, style)
 
-  tag_gap = 52 if args.aspect == "4:3" else 90
+  tag_gap = (52 if args.aspect == "4:3" else 90) + int(style.get("tagGapExtra", 0))
   tag_y = main_y + title_1_height + title_2_height + tag_gap
   tag_height = draw_tagline(draw, subtitle, tag_y, style)
   note_y = args.note_y if args.note_y is not None else int(style.get("noteY", 1280))
@@ -442,8 +521,22 @@ def render_cover(args):
     "title": [title_line_1, title_line_2],
     "titleWidths": [title_1_width, title_2_width],
     "fontNames": [getattr(title_1_font, "getname", lambda: ("unknown", "unknown"))()[0]],
+    "fontFiles": sorted({
+      str(getattr(font, "path", ""))
+      for font in (title_1_font, title_2_font)
+      if getattr(font, "path", "")
+    }),
+    "missingGlyphs": [],
     "errors": [],
   }
+  for label, text, font in [
+    ("title-line-1", title_line_1, title_1_font),
+    ("title-line-2", title_line_2, title_2_font),
+  ]:
+    for char in missing_glyphs(font, text):
+      qc["missingGlyphs"].append({"text": label, "character": char, "codepoint": f"U+{ord(char):04X}"})
+  if qc["missingGlyphs"]:
+    qc["errors"].append("missing_glyph")
   if title_1_width > COVER_WIDTH - 120 or title_2_width > COVER_WIDTH - 100:
     qc["errors"].append("title_overflow")
   if main_y < 0 or main_y + title_1_height + title_2_height > COVER_HEIGHT:
@@ -484,6 +577,7 @@ def main():
   parser.add_argument("--tagline", default="")
   parser.add_argument("--note", default="")
   parser.add_argument("--series-label")
+  parser.add_argument("--corner-label", default="")
   parser.add_argument("--meta-line-1")
   parser.add_argument("--meta-line-2")
   parser.add_argument("--title-y", type=int)

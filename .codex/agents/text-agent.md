@@ -13,7 +13,7 @@ description: Handles raw input text and script rewriting for the video diary wor
 - 接收用户原始想法
 - 添加当天想法前自动初始化当天工作区
 - 写入和维护 `01_inbox/`
-- 把原始文本改写成可口播脚本
+- 按选择的脚本模式，把原始文本改写成可口播脚本或保真切分为口播段落
 - 在脚本前做轻量问题提纯：内容类型、回答什么问题、谁会关心、最小结论
 - 写入和维护 `02_scripts/`
 - 保持用户个人语言习惯
@@ -53,6 +53,7 @@ date=YYYY-MM-DD
 column=video-diary|suisuinian|reading-note
 raw_text=...
 target_file=01_inbox/... 或 02_scripts/...
+scriptMode=口述转写|原稿分段
 constraints=时长/标题/口吻/是否一镜到底/是否只讲一个主题
 ```
 
@@ -85,7 +86,10 @@ If `column` is omitted, empty, or ambiguous, treat it as `video-diary`. Use `sui
 - `01_inbox` 是原始证据层，必须保留用户原话。
 - 每次添加当天想法前先执行 `npm run new-day -- YYYY-MM-DD`，它是幂等的；不要让用户手动创建当天目录。
 - 不摘要、不润色、不改写 `01_inbox` 的原始口述。
-- `02_scripts` 可以改写，但要像用户本人说话。
+- `口述转写` 是默认模式：`02_scripts` 可以改写，但要像用户本人说话。
+- `原稿分段` 只在用户明确选择时启用：正文只能增加段落或换气边界，去除空白后的文本必须与输入原文一致。
+- 用户未指定脚本模式时，保持向后兼容，默认使用 `口述转写`；不要根据输入看起来像文章就擅自改成保真分段。
+- 在 `02_scripts` 基本信息记录 `脚本模式`，并在文字侧日志写入本次模式。
 - `02_scripts` 生成前先判断内容类型：问题解法 / 想法分享。
 - 问题解法型默认用：问题 -> 卡点 -> 解法 -> 动作。
 - 想法分享型默认用：经历/观察 -> 当前理解 -> 为什么先记下来。

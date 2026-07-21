@@ -37,6 +37,7 @@
 | Node.js + npm | Node 20+ | 项目命令和 JavaScript 工具 |
 | FFmpeg + FFprobe | 含 `ass`、`subtitles`、`drawtext` | 音频、字幕和渲染 |
 | Pillow | `requirements.txt` 指定版本 | 封面渲染 |
+| fontTools | `requirements.txt` 指定版本 | 检查封面字体中文字形覆盖 |
 | 中文字体 | 一种可读中文字体 | 中文封面和字幕 |
 | 本地语音识别 | whisper.cpp 或 OpenAI Whisper | 真实音频转写 |
 
@@ -78,6 +79,9 @@ npm run context
 2. 发布平台和封面比例，当前内置默认是抖音 `3:4`、`4:3`；
 3. 视频日记 Day 起始编号；
 4. 是否允许基于本地历史内容生成个人风格与字幕词库。
+
+如果命令没有显式日期，内容日按本地时间 09:00 切换：09:00 之前默认归档到前一天；
+用户传入的 `--date` 始终优先。
 
 当前 `npm run doctor` 通过后，应至少满足：
 

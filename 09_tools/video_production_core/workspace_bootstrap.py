@@ -525,6 +525,7 @@ def doctor_workspace(root: Path) -> Dict[str, Any]:
   node = find_binary("node")
   whisper = find_binary("whisper-cli", [Path("/usr/local/bin/whisper-cli")]) or find_binary("whisper")
   pillow = importlib.util.find_spec("PIL") is not None
+  fonttools = importlib.util.find_spec("fontTools") is not None
   custom_font = os.environ.get("VIDEO_WORKSHOP_FONT", "").strip()
   cover_font_candidates = [
     Path(custom_font) if custom_font else None,
@@ -544,6 +545,7 @@ def doctor_workspace(root: Path) -> Dict[str, Any]:
   add("ffmpeg", bool(ffmpeg), False, ffmpeg or "not found")
   add("ffprobe", bool(ffprobe), False, ffprobe or "not found")
   add("pillow", pillow, False, "installed" if pillow else "not found")
+  add("fonttools", fonttools, False, "installed" if fonttools else "not found")
   add("cover-font", bool(cover_font), False, cover_font or "set VIDEO_WORKSHOP_FONT")
   add("transcription-engine", bool(whisper), False, whisper or "not found")
 
@@ -555,6 +557,7 @@ def doctor_workspace(root: Path) -> Dict[str, Any]:
     "ffmpeg",
     "ffprobe",
     "pillow",
+    "fonttools",
     "cover-font",
     "transcription-engine",
     "disk-space",

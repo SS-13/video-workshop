@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import datetime, timezone, timedelta
 import importlib.util
 import json
 import sys
@@ -18,10 +19,20 @@ NEW_DAY = importlib.util.module_from_spec(NEW_DAY_SPEC)
 NEW_DAY_SPEC.loader.exec_module(NEW_DAY)
 
 from video_production_core.content_layout import ContentRef, next_sequence  # noqa: E402
+from video_production_core.content_date import default_content_date  # noqa: E402
 from video_production_core.run_store import default_run_id  # noqa: E402
 
 
 class ContentLayoutTest(unittest.TestCase):
+  def test_default_content_date_uses_local_nine_am_boundary(self):
+    local_timezone = timezone(timedelta(hours=8))
+
+    before_boundary = datetime(2026, 7, 18, 8, 59, tzinfo=local_timezone)
+    at_boundary = datetime(2026, 7, 18, 9, 0, tzinfo=local_timezone)
+
+    self.assertEqual(default_content_date(before_boundary), "2026-07-17")
+    self.assertEqual(default_content_date(at_boundary), "2026-07-18")
+
   def test_new_day_inbox_tracks_idea_provenance(self):
     ref = ContentRef("2026-07-17", "video-diary", "001")
 

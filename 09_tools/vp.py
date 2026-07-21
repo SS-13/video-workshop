@@ -46,6 +46,7 @@ from video_production_core.workspace_bootstrap import (  # noqa: E402
 from video_production_core.canary_validation import validate_real_canary  # noqa: E402
 from video_production_core.canary_adoption import adopt_canary_run  # noqa: E402
 from video_production_core.active_finalization import finalize_active_run  # noqa: E402
+from video_production_core.content_date import default_content_date  # noqa: E402
 from video_production_core.cover_workflow import (  # noqa: E402
   CoverWorkflowError,
   list_cover_history,
@@ -95,7 +96,7 @@ from evolution_loop import (  # noqa: E402
 
 
 def today() -> str:
-  return datetime.now().astimezone().date().isoformat()
+  return default_content_date()
 
 
 def json_envelope(root: Path, data: Any) -> Dict[str, Any]:

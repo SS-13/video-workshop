@@ -328,6 +328,8 @@ def main() -> None:
   print(f"active_run_changed={str(active_run['changed']).lower()}")
   if active_run.get("run"):
     print(f"active_run_id={active_run['run']['id']}")
+  if active_run.get("contentLedger"):
+    print(f"content_ledger_changed={str(active_run['contentLedger'].get('changed', False)).lower()}")
 
 
 if __name__ == "__main__":

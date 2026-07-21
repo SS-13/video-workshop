@@ -41,6 +41,7 @@ packages, downloading a transcription model, or using administrator access.
 | Node.js + npm | Node 20+ | project commands and JavaScript helpers |
 | FFmpeg + FFprobe | build with `ass`, `subtitles`, and `drawtext` filters | audio extraction, subtitles, final render |
 | Pillow | version from `requirements.txt` | cover rendering |
+| fontTools | version from `requirements.txt` | verify selected font glyph coverage |
 | CJK font | one readable Chinese font | Chinese covers and subtitles |
 | Local speech-to-text | `whisper.cpp` plus a GGML model, or OpenAI Whisper | real-audio transcription and timing |
 
@@ -139,6 +140,9 @@ Before initialization, the Agent asks the user to confirm:
 
 The Agent reports the selected values back and waits for confirmation before
 running setup.
+
+When a command omits the content date, the local content day changes at 09:00:
+inputs before 09:00 use the previous date. An explicit `--date` always wins.
 
 Only offer values the installed renderer supports. If the user requests a
 different platform or cover ratio, retain it as an adapter requirement and do

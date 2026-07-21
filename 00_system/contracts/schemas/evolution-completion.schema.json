@@ -59,6 +59,11 @@
           "compatibilityImpact": {"type": "string"},
           "requiresMigration": {"type": "boolean"},
           "requiresCanary": {"type": "boolean"},
+          "processAction": {
+            "type": "string",
+            "enum": ["none", "test", "rule", "gate", "runbook", "multiple"]
+          },
+          "processNote": {"type": "string"},
           "status": {"type": "string", "enum": ["completed"]}
         }
       }

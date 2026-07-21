@@ -24,6 +24,8 @@
       "compatibilityImpact": "backward-compatible-feature",
       "requiresMigration": false,
       "requiresCanary": true,
+      "processAction": "test",
+      "processNote": "Added deterministic publish package regression coverage.",
       "status": "completed"
     }
   ]

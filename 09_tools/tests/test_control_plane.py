@@ -180,6 +180,28 @@ class WorkspaceBootstrapTest(unittest.TestCase):
       self.assertTrue(result["loopReady"])
       self.assertEqual(result["personalizationStatus"], "pending")
 
+      workspace_path = root / "00_state" / "workspace.json"
+      workspace = json.loads(workspace_path.read_text(encoding="utf-8"))
+      workspace["integrations"]["githubIssues"] = {
+        "enabled": True,
+        "repository": "example/video-workshop",
+      }
+      workspace_path.write_text(json.dumps(workspace), encoding="utf-8")
+      with patch(
+        "video_production_core.workspace_bootstrap.github_auth_ready",
+        return_value=False,
+      ):
+        github_unavailable = doctor_workspace(root)
+
+      github_check = next(
+        check for check in github_unavailable["checks"]
+        if check["name"] == "github-issues"
+      )
+      self.assertEqual(github_check["status"], "fail")
+      self.assertFalse(github_check["required"])
+      self.assertFalse(github_unavailable["githubIssuesReady"])
+      self.assertTrue(github_unavailable["readyForContent"])
+
   def test_ai_context_lists_public_order_and_local_corpus(self):
     with tempfile.TemporaryDirectory() as directory:
       root = Path(directory)
@@ -200,6 +222,32 @@ class WorkspaceBootstrapTest(unittest.TestCase):
       self.assertEqual(context["personalization"]["status"], "pending")
       self.assertIn("01_inbox/sample.md", context["personalization"]["sourceFiles"])
       self.assertNotIn("06_logs/README.md", context["personalization"]["sourceFiles"])
+
+  def test_doctor_blocks_render_when_disk_space_is_below_threshold(self):
+    with tempfile.TemporaryDirectory() as directory:
+      root = Path(directory)
+      shutil.copytree(PROJECT_ROOT / "00_system", root / "00_system")
+      shutil.copytree(PROJECT_ROOT / ".codex", root / ".codex")
+      shutil.copy2(PROJECT_ROOT / "package.json", root / "package.json")
+      shutil.copy2(PROJECT_ROOT / ".gitignore", root / ".gitignore")
+      shutil.copy2(PROJECT_ROOT / "AGENTS.md", root / "AGENTS.md")
+      shutil.copy2(PROJECT_ROOT / "START_HERE.md", root / "START_HERE.md")
+      shutil.copy2(PROJECT_ROOT / "PIPELINE.md", root / "PIPELINE.md")
+      shutil.copy2(PROJECT_ROOT / "WORKFLOW.md", root / "WORKFLOW.md")
+      initialize_workspace(root)
+
+      with patch(
+        "video_production_core.media_retention.shutil.disk_usage",
+        return_value=type("Usage", (), {"free": 1024})(),
+      ):
+        result = doctor_workspace(root)
+
+      disk_check = next(
+        check for check in result["checks"] if check["name"] == "disk-space"
+      )
+      self.assertEqual(disk_check["status"], "fail")
+      self.assertTrue(result["valid"])
+      self.assertFalse(result["readyForRender"])
 
 
 class CoverWorkflowTest(unittest.TestCase):
@@ -462,7 +510,11 @@ class ContractValidationTest(unittest.TestCase):
     result = validate_contract_examples(PROJECT_ROOT)
 
     self.assertTrue(result["valid"], result["errors"])
-    self.assertEqual(len(result["contracts"]), 4)
+    self.assertEqual(len(result["contracts"]), 5)
+    self.assertIn(
+      "evolution-observation",
+      {item["contract"] for item in result["contracts"]},
+    )
 
   def test_invalid_contract_is_detected(self):
     schema = load_contract_json(

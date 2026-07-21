@@ -21,6 +21,7 @@ CLOSING_PATTERN = re.compile(
   r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b",
   re.IGNORECASE,
 )
+TOPK_FIX_MARKER = "<!-- video-workshop-topk-fix -->"
 REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 MANAGED_LABEL_PREFIXES = ("priority:", "type:", "status:")
 PRIVATE_PATTERNS = [
@@ -71,6 +72,10 @@ LABEL_DEFINITIONS = {
   "status:verified": {
     "color": "0E8A16",
     "description": "Local completion and verification evidence are recorded",
+  },
+  "status:backlog": {
+    "color": "6E7781",
+    "description": "Previously selected work currently outside the active TopK",
   },
 }
 
@@ -213,7 +218,9 @@ def public_safety_reason(candidate: Dict[str, Any], public_scopes: Iterable[str]
     return "empty-summary"
   if len(summary) > 500:
     return "summary-too-long"
-  values = [summary, str(candidate.get("affectedComponent", ""))]
+  triage = candidate.get("triage", {})
+  triage_values = triage.values() if isinstance(triage, dict) else []
+  values = [summary, str(candidate.get("affectedComponent", "")), *[str(value) for value in triage_values]]
   for value in values:
     if any(pattern.search(value) for pattern in PRIVATE_PATTERNS):
       return "private-pattern"
@@ -237,31 +244,66 @@ def markdown_value(value: Any) -> str:
   return str(value).replace("|", "\\|").replace("\n", " ")
 
 
-def build_managed_block(metadata: Dict[str, Any], priority: str, verified: bool) -> str:
+def build_managed_block(
+  metadata: Dict[str, Any],
+  priority: str,
+  workflow_status: str,
+  completion: Optional[Dict[str, Any]] = None,
+) -> str:
   metadata_json = json.dumps(metadata, ensure_ascii=False, sort_keys=True)
-  status = "verified" if verified else "topk"
+  triage = metadata.get("triage", {}) if isinstance(metadata.get("triage", {}), dict) else {}
+  occurrence_count = int(metadata.get("occurrenceCount", 1) or 1)
+  eligibility_reasons = metadata.get("eligibilityReasons", [])
+
+  def triage_value(key: str, fallback: str) -> str:
+    value = str(triage.get(key, "")).strip()
+    return markdown_value(value or fallback)
+
+  reproduction_fallback = (
+    f"同类 Observation 已记录 {occurrence_count} 次。"
+    if occurrence_count > 1
+    else "复现细节待在实现前补齐；原始运行记录保留在本地。"
+  )
+  priority_fallback = (
+    ", ".join(str(value) for value in eligibility_reasons)
+    or f"当前有效优先级为 {priority}。"
+  )
+  verified = workflow_status == "verified"
+  checked = "x" if verified else " "
+  process_action = str(completion.get("processAction", "none")) if completion else "pending"
   return "\n".join([
     MANAGED_START,
     f"<!-- video-workshop-topk {metadata_json} -->",
-    "## TopK 工作项",
+    "## Top-K Issue",
     "",
     str(metadata["summary"]),
     "",
     "| 字段 | 当前值 |",
     "| --- | --- |",
     f"| Candidate | `{markdown_value(metadata['candidateId'])}` |",
-    f"| 首次进入 TopK | `{markdown_value(metadata['selectedDate'])}` |",
+    f"| 首次进入 Top-K | `{markdown_value(metadata['selectedDate'])}` |",
     f"| 类型 | `{markdown_value(metadata['issueType'])}` |",
     f"| 当前优先级 | `{priority}` |",
     f"| 原始优先级 | `{markdown_value(metadata['originalPriority'])}` |",
     f"| 组件 | `{markdown_value(metadata['component'])}` |",
     f"| 公开投影 | `{'redacted' if metadata.get('redacted') else 'full'}` |",
-    f"| 本地验证 | `{status}` |",
+    f"| 当前状态 | `{workflow_status}` |",
+    "",
+    "## 运行分诊",
+    "",
+    f"- **影响的流程步骤：** {triage_value('workflowStep', str(metadata.get('component', 'general')))}",
+    f"- **复现条件 / 运行记录：** {triage_value('reproduction', reproduction_fallback)}",
+    f"- **用户或产物损失：** {triage_value('userImpact', '待评估；未确认前不得夸大影响。')}",
+    f"- **优先级理由：** {triage_value('priorityReason', priority_fallback)}",
+    f"- **修复方案：** {triage_value('proposedFix', '由实现 PR 给出最小修复方案。')}",
+    f"- **验证证据：** {triage_value('validationPlan', '测试、产物、真实运行或用户验收至少提供一项。')}",
+    f"- **是否需要改流程或加门禁：** {triage_value('processGate', '完成时通过 processAction 显式判断。')}",
+    f"- **完成后的流程回写：** `{process_action}`",
     "",
     "## 关闭门禁",
     "",
-    "- [ ] 实现完成并形成可核对产物",
-    "- [ ] 通过 `vp evolve complete` 登记验证证据",
+    f"- [{checked}] 实现完成并形成可核对产物",
+    f"- [{checked}] 通过 `vp evolve complete` 登记验证证据",
     "- [ ] 实现 PR 使用 `Closes #<issue-number>` 关联本 Issue",
     "- [ ] 必需检查通过并合并到默认分支",
     "",
@@ -295,13 +337,13 @@ def is_managed_label(name: str) -> bool:
   return name == "topk" or name.startswith(MANAGED_LABEL_PREFIXES)
 
 
-def merged_labels(existing: Iterable[str], issue_type: str, priority: str, verified: bool) -> List[str]:
+def merged_labels(existing: Iterable[str], issue_type: str, priority: str, workflow_status: str) -> List[str]:
   custom = [name for name in existing if not is_managed_label(name)]
   managed = [
     "topk",
     f"type:{issue_type}",
     f"priority:{priority}",
-    "status:verified" if verified else "status:topk",
+    f"status:{workflow_status}",
   ]
   return sorted(set([*custom, *managed]))
 
@@ -318,6 +360,9 @@ def metadata_from_candidate(candidate: Dict[str, Any], target_date: str, issue_t
     "category": str(candidate.get("category", "uncategorized")),
     "scope": str(candidate.get("scope", "system-core")),
     "redacted": bool(candidate.get("redacted", False)),
+    "occurrenceCount": int(candidate.get("occurrenceCount", 1) or 1),
+    "eligibilityReasons": list(candidate.get("eligibilityReasons", [])),
+    "triage": dict(candidate.get("triage", {})) if isinstance(candidate.get("triage", {}), dict) else {},
   }
 
 
@@ -332,6 +377,15 @@ def redacted_candidate(candidate: Dict[str, Any], reason: str) -> Dict[str, Any]
     "observationIds": [],
     "redacted": True,
     "redactionReason": reason,
+    "triage": {
+      "workflowStep": "细节保留在本地工作区。",
+      "reproduction": "细节保留在本地工作区。",
+      "userImpact": "细节保留在本地工作区。",
+      "priorityReason": "公开投影仅保留动态优先级。",
+      "proposedFix": "细节保留在本地工作区。",
+      "validationPlan": "验证证据保留在本地工作区。",
+      "processGate": "流程判断保留在本地工作区。",
+    },
   }
 
 
@@ -345,7 +399,117 @@ def candidate_from_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
     "affectedComponent": metadata.get("component", "general"),
     "category": metadata.get("category", "uncategorized"),
     "scope": metadata.get("scope", "system-core"),
+    "occurrenceCount": metadata.get("occurrenceCount", 1),
+    "eligibilityReasons": metadata.get("eligibilityReasons", []),
+    "triage": metadata.get("triage", {}),
   }
+
+
+def historical_candidate(root: Path, candidate_id: str) -> Optional[Dict[str, Any]]:
+  state_root = root / "00_state" / "evolution"
+  if not state_root.is_dir():
+    return None
+  for path in sorted(state_root.glob("*.json"), reverse=True):
+    try:
+      state = load_json(path)
+    except (OSError, json.JSONDecodeError):
+      continue
+    for candidate in [*state.get("topK", []), *state.get("backlog", [])]:
+      if str(candidate.get("id", "")) == candidate_id:
+        return candidate
+  return None
+
+
+def load_daily_candidate(root: Path, target_date: str, candidate_id: str) -> Dict[str, Any]:
+  state_path = root / "00_state" / "evolution" / f"{validate_date(target_date)}.json"
+  if not state_path.is_file():
+    raise GitHubIssueSyncError(f"Daily Evolution state does not exist: {target_date}")
+  state = load_json(state_path)
+  for candidate in state.get("topK", []):
+    if str(candidate.get("id", "")) == candidate_id:
+      return candidate
+  raise GitHubIssueSyncError(
+    f"Candidate is not in the active Top-K for {target_date}: {candidate_id}"
+  )
+
+
+def recommended_change_type(candidate: Dict[str, Any]) -> str:
+  category = str(candidate.get("category", ""))
+  if category == "bug":
+    return "bugfix"
+  if category in {"new-capability", "integration-request"}:
+    return "feature"
+  return "major-evolution"
+
+
+def build_issue_work_packet(
+  root: Path,
+  target_date: str,
+  candidate_id: str,
+  repository: Optional[str] = None,
+  client: Optional["GitHubClient"] = None,
+  offline: bool = False,
+) -> Dict[str, Any]:
+  candidate = load_daily_candidate(root.resolve(), target_date, candidate_id)
+  packet: Dict[str, Any] = {
+    "date": target_date,
+    "candidateId": candidate_id,
+    "summary": str(candidate.get("summary", "")).strip(),
+    "priority": str(candidate.get("priority", candidate.get("originalPriority", "P2"))),
+    "category": str(candidate.get("category", "uncategorized")),
+    "affectedComponent": str(candidate.get("affectedComponent", "general")),
+    "validationPlan": str(candidate.get("triage", {}).get("validationPlan", "")),
+    "proposedFix": str(candidate.get("triage", {}).get("proposedFix", "")),
+    "recommendedChangeType": recommended_change_type(candidate),
+    "branchName": f"fix/topk-{candidate_id.lower()}",
+    "issueNumber": None,
+    "issueUrl": "",
+  }
+  if offline or client is None:
+    if not offline:
+      packet["githubStatus"] = "not-queried"
+    else:
+      packet["githubStatus"] = "offline"
+  else:
+    packet["githubStatus"] = "queried"
+    for issue in client.list_managed_issues():
+      metadata = parse_metadata(str(issue.get("body", "")))
+      if metadata and str(metadata.get("candidateId", "")) == candidate_id:
+        packet["issueNumber"] = issue.get("number")
+        packet["issueUrl"] = str(issue.get("html_url", ""))
+        break
+    if packet["issueNumber"] is None:
+      raise GitHubIssueSyncError(
+        f"No GitHub Issue exists for {candidate_id}; run evolve issues sync first."
+      )
+  issue_reference = (
+    f"Closes #{packet['issueNumber']}"
+    if packet.get("issueNumber") is not None
+    else "Closes #<issue-number>"
+  )
+  packet["prBody"] = "\n".join([
+    TOPK_FIX_MARKER,
+    "",
+    "## Problem",
+    "",
+    packet["summary"],
+    "",
+    "## Verification",
+    "",
+    f"- Validation plan: {packet['validationPlan'] or 'Add regression evidence before completion.'}",
+    "- Run `vp evolve complete` only after the evidence is available.",
+    "",
+    issue_reference,
+  ])
+  packet["completionCommand"] = " ".join([
+    "python3 09_tools/vp.py evolve complete",
+    candidate_id,
+    f"--date {target_date}",
+    f"--change-type {packet['recommendedChangeType']}",
+    "--evidence path/to/verification-report.md",
+    "--process-action test",
+  ])
+  return packet
 
 
 class GitHubClient:
@@ -358,7 +522,12 @@ class GitHubClient:
     if payload is not None:
       command.extend(["--input", "-"])
       input_text = json.dumps(payload, ensure_ascii=False)
-    attempts = 1 if "--method" in args else 3
+    method = "GET"
+    if "--method" in args:
+      method_index = args.index("--method")
+      if method_index + 1 < len(args):
+        method = str(args[method_index + 1]).upper()
+    attempts = 5 if method in {"GET", "PATCH", "PUT", "DELETE"} else 1
     result = None
     for attempt in range(attempts):
       result = subprocess.run(
@@ -370,8 +539,23 @@ class GitHubClient:
       )
       if result.returncode == 0:
         break
-      if attempt + 1 < attempts:
-        time.sleep(0.5 * (attempt + 1))
+      detail = result.stderr.strip() or result.stdout.strip()
+      transient = any(
+        marker in detail.lower()
+        for marker in (
+          "http 502",
+          "http 503",
+          "http 504",
+          "connection reset",
+          "connection refused",
+          "temporary failure",
+          "timeout",
+          "timed out",
+        )
+      )
+      if not transient or attempt + 1 >= attempts:
+        break
+      time.sleep(min(2 ** attempt, 8))
     if result is None or result.returncode != 0:
       detail = (
         (result.stderr.strip() or result.stdout.strip())
@@ -434,6 +618,66 @@ class GitHubClient:
     repository = self._run([f"repos/{self.repository}"])
     return str(repository.get("default_branch", "main"))
 
+  def get_pull_request_checks(self, number: int) -> Dict[str, Any]:
+    """Read required PR checks without executing code from the PR branch."""
+    result = subprocess.run(
+      [
+        "gh",
+        "pr",
+        "checks",
+        str(number),
+        "--repo",
+        self.repository,
+        "--required",
+        "--json",
+        "name,state,bucket",
+      ],
+      check=False,
+      capture_output=True,
+      text=True,
+    )
+    output = result.stdout.strip()
+    try:
+      checks = json.loads(output) if output else []
+    except json.JSONDecodeError as error:
+      raise GitHubIssueSyncError(
+        f"Could not parse required PR checks for #{number}: {output or result.stderr.strip()}"
+      ) from error
+    if result.returncode != 0 and not checks:
+      detail = result.stderr.strip() or output or "gh pr checks failed"
+      raise GitHubIssueSyncError(detail)
+    checks = list(checks or [])
+    states = {str(item.get("state", "")).upper() for item in checks}
+    success_states = {"SUCCESS", "NEUTRAL", "SKIPPED"}
+    pending_states = {"PENDING", "QUEUED", "IN_PROGRESS", "EXPECTED", "STARTUP_FAILURE"}
+    if not checks:
+      status = "no-checks"
+    elif states <= success_states:
+      status = "success"
+    elif states & pending_states:
+      status = "pending"
+    else:
+      status = "failure"
+    return {
+      "status": status,
+      "checks": checks,
+      "states": sorted(states),
+    }
+
+  def merge_pull_request(self, number: int, auto: bool = False) -> Dict[str, Any]:
+    command = ["gh", "pr", "merge", str(number), "--repo", self.repository, "--squash"]
+    if auto:
+      command.append("--auto")
+    result = subprocess.run(command, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+      detail = result.stderr.strip() or result.stdout.strip() or "gh pr merge failed"
+      raise GitHubIssueSyncError(detail)
+    return {
+      "number": number,
+      "auto": auto,
+      "output": result.stdout.strip(),
+    }
+
 
 def expected_issue(
   metadata: Dict[str, Any],
@@ -441,6 +685,7 @@ def expected_issue(
   policy: Dict[str, Any],
   completion: Optional[Dict[str, Any]],
   existing: Optional[Dict[str, Any]] = None,
+  active: bool = True,
 ) -> Dict[str, Any]:
   candidate = candidate_from_metadata(metadata)
   issue_type = issue_type_for(candidate, completion)
@@ -452,10 +697,11 @@ def expected_issue(
     policy,
   )
   verified = completion is not None
+  workflow_status = "verified" if verified else ("topk" if active else "backlog")
   existing_labels = issue_label_names(existing or {})
-  labels = merged_labels(existing_labels, issue_type, priority, verified)
+  labels = merged_labels(existing_labels, issue_type, priority, workflow_status)
   title = str(metadata["summary"])[:240]
-  managed = build_managed_block(metadata, priority, verified)
+  managed = build_managed_block(metadata, priority, workflow_status, completion)
   body = replace_managed_block(str((existing or {}).get("body", "")), managed)
   return {
     "candidateId": metadata["candidateId"],
@@ -469,6 +715,7 @@ def expected_issue(
     "ageDays": age_days,
     "priorityRaisedBy": raised_by,
     "verified": verified,
+    "workflowStatus": workflow_status,
   }
 
 
@@ -510,8 +757,8 @@ def sync_topk_issues(
   if not state_path.is_file():
     raise GitHubIssueSyncError(f"Daily Evolution state does not exist: {target_date}")
   state = load_json(state_path)
-  if not state.get("topKLocked", False):
-    raise GitHubIssueSyncError(f"Daily TopK is not locked: {target_date}")
+  if not state.get("topKLocked", False) and state.get("selectionMode") != "rolling":
+    raise GitHubIssueSyncError(f"Daily TopK is neither locked nor rolling: {target_date}")
   policy = load_json(root / "00_system" / "evolution-policy.json")
   public_scopes = policy.get("githubIssues", {}).get("publicScopes", ["system-core"])
   completions = load_completed_candidates(root)
@@ -524,24 +771,63 @@ def sync_topk_issues(
       remote_by_candidate[str(metadata["candidateId"])] = issue
 
   candidates: Dict[str, Dict[str, Any]] = {}
+  active_candidate_ids = {
+    str(candidate.get("id", ""))
+    for candidate in state.get("topK", [])
+    if candidate.get("id")
+  }
   privacy_skipped = []
   privacy_redacted = []
-  for candidate in state.get("topK", []):
+  state_candidates = [
+    *state.get("topK", []),
+    *[
+      candidate
+      for candidate in state.get("backlog", [])
+      if candidate.get("eligible", True)
+    ],
+  ]
+  for candidate in state_candidates:
+    candidate_id = str(candidate.get("id", ""))
+    if not candidate_id or candidate_id in candidates:
+      continue
     reason = public_safety_reason(candidate, public_scopes)
     if reason:
       privacy_redacted.append({
-        "candidateId": candidate.get("id"),
+        "candidateId": candidate_id,
         "reason": reason,
       })
       candidate = redacted_candidate(candidate, reason)
-    completion = completions.get(str(candidate.get("id", "")))
+    completion = completions.get(candidate_id)
     issue_type = issue_type_for(candidate, completion)
-    candidates[str(candidate["id"])] = metadata_from_candidate(candidate, target_date, issue_type)
+    candidates[candidate_id] = metadata_from_candidate(candidate, target_date, issue_type)
 
   for candidate_id, issue in remote_by_candidate.items():
     metadata = parse_metadata(str(issue.get("body", "")))
     if metadata and candidate_id not in candidates:
       candidates[candidate_id] = metadata
+
+  for candidate_id, completion in completions.items():
+    if candidate_id in candidates:
+      continue
+    candidate = historical_candidate(root, candidate_id)
+    if candidate is None:
+      candidate = {
+        "id": candidate_id,
+        "summary": f"已验证工作项 {candidate_id}",
+        "originalPriority": completion.get("priority", "P2"),
+        "priority": completion.get("priority", "P2"),
+        "firstSeenAt": completion.get("completedAt", f"{target_date}T00:00:00+00:00"),
+        "affectedComponent": "private-local",
+        "category": "uncategorized",
+        "scope": "redacted",
+        "redacted": True,
+      }
+    reason = public_safety_reason(candidate, public_scopes)
+    if reason:
+      privacy_redacted.append({"candidateId": candidate_id, "reason": reason})
+      candidate = redacted_candidate(candidate, reason)
+    issue_type = issue_type_for(candidate, completion)
+    candidates[candidate_id] = metadata_from_candidate(candidate, target_date, issue_type)
 
   created = []
   updated = []
@@ -555,7 +841,14 @@ def sync_topk_issues(
   for candidate_id, metadata in sorted(candidates.items()):
     existing = remote_by_candidate.get(candidate_id)
     completion = completions.get(candidate_id)
-    expected = expected_issue(metadata, target_date, policy, completion, existing)
+    expected = expected_issue(
+      metadata,
+      target_date,
+      policy,
+      completion,
+      existing,
+      active=candidate_id in active_candidate_ids,
+    )
     summary = {
       "candidateId": candidate_id,
       "issueType": expected["issueType"],
@@ -563,6 +856,7 @@ def sync_topk_issues(
       "originalPriority": expected["originalPriority"],
       "ageDays": expected["ageDays"],
       "verified": expected["verified"],
+      "workflowStatus": expected["workflowStatus"],
     }
     if existing and str(existing.get("state", "open")) == "closed":
       closed.append({**summary, "number": existing.get("number"), "url": existing.get("html_url")})
@@ -615,10 +909,15 @@ def closing_issue_numbers(body: str) -> List[int]:
   return sorted({int(value) for value in CLOSING_PATTERN.findall(body or "")})
 
 
-def check_pull_request_issue_gate(client: GitHubClient, pull_number: int) -> Dict[str, Any]:
+def check_pull_request_issue_gate(
+  client: GitHubClient,
+  pull_number: int,
+  require_topk: bool = False,
+) -> Dict[str, Any]:
   pull = client.get_pull_request(pull_number)
   default_branch = client.default_branch()
-  issue_numbers = closing_issue_numbers(str(pull.get("body", "")))
+  body = str(pull.get("body", ""))
+  issue_numbers = closing_issue_numbers(body)
   checked = []
   violations = []
   for issue_number in issue_numbers:
@@ -637,6 +936,10 @@ def check_pull_request_issue_gate(client: GitHubClient, pull_number: int) -> Dic
       violations.append(
         f"TopK issue #{issue_number} is not verified; run vp evolve complete and sync issues first."
       )
+  if require_topk and not checked:
+    violations.append(
+      "TopK repair PRs must contain Closes #N for at least one managed TopK Issue."
+    )
   if checked and str(pull.get("base", {}).get("ref", "")) != default_branch:
     violations.append(
       f"TopK issues may close only through the default branch: {default_branch}."
@@ -649,5 +952,36 @@ def check_pull_request_issue_gate(client: GitHubClient, pull_number: int) -> Dic
     "defaultBranch": default_branch,
     "closingIssueNumbers": issue_numbers,
     "checkedTopKIssues": checked,
+    "requireTopK": require_topk,
+    "isTopKFix": bool(checked) or TOPK_FIX_MARKER in body,
+    "draft": bool(pull.get("draft", False)),
+    "violations": violations,
+  }
+
+
+def check_pull_request_merge_gate(
+  client: GitHubClient,
+  pull_number: int,
+) -> Dict[str, Any]:
+  pull = client.get_pull_request(pull_number)
+  issue_gate = check_pull_request_issue_gate(client, pull_number, require_topk=True)
+  violations = list(issue_gate["violations"])
+  default_branch = issue_gate["defaultBranch"]
+  base_branch = str(pull.get("base", {}).get("ref", ""))
+  if base_branch != default_branch and not any(
+    "default branch" in violation for violation in violations
+  ):
+    violations.append(f"TopK repair PRs must target the default branch: {default_branch}.")
+  if bool(pull.get("draft", False)):
+    violations.append("TopK repair PR must be marked Ready for review before merge.")
+  checks = client.get_pull_request_checks(pull_number)
+  if checks.get("status") != "success":
+    violations.append(
+      f"Required PR checks are not green: {checks.get('status', 'unknown')}."
+    )
+  return {
+    **issue_gate,
+    "valid": not violations,
+    "checks": checks,
     "violations": violations,
   }

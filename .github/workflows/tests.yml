@@ -29,10 +29,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: >-
-          python3 09_tools/vp.py evolve issues check-pr
-          --repo "$REPOSITORY"
-          --pr "$PR_NUMBER"
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [[ "$HEAD_REF" == fix/topk-* ]]; then
+            REQUIRE_TOPK="--require-topk"
+          else
+            REQUIRE_TOPK=""
+          fi
+          python3 09_tools/vp.py evolve issues check-pr \
+            --repo "$REPOSITORY" \
+            --pr "$PR_NUMBER" \
+            $REQUIRE_TOPK
 
   test:
     runs-on: ubuntu-latest

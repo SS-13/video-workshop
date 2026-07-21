@@ -10,8 +10,16 @@ import importlib.util
 import json
 import os
 import shutil
+import subprocess
 
 from video_production_core.contracts import validate_contract_examples
+from video_production_core.media_retention import (
+  DEFAULT_MINIMUM_FREE_BYTES,
+  DEFAULT_RETENTION_DAYS,
+  MediaRetentionError,
+  disk_space_status,
+  get_retention_config,
+)
 from video_production_core.registry import validate_control_plane
 
 
@@ -28,6 +36,7 @@ WORKSPACE_DIRECTORIES = [
   "04_videos",
   "05_exports",
   "06_logs",
+  "06_logs/media-retention",
   "10_skills/personal-speaking-style",
   "11_templates/audio/bgm",
   "11_templates/pencil-cover-demos",
@@ -215,6 +224,11 @@ def initialize_workspace(root: Path) -> Dict[str, Any]:
           "repository": "",
         },
       },
+      "mediaRetention": {
+        "enabled": False,
+        "retentionDays": DEFAULT_RETENTION_DAYS,
+        "minimumFreeBytes": DEFAULT_MINIMUM_FREE_BYTES,
+      },
       "createdAt": now_iso(),
     }, ensure_ascii=False, indent=2) + "\n",
     root / "00_state" / "day-counter.json": json.dumps({
@@ -354,6 +368,22 @@ def find_binary(name: str, candidates: List[Path] | None = None) -> str:
   return shutil.which(name) or ""
 
 
+def github_auth_ready(github_cli: str) -> bool:
+  if not github_cli:
+    return False
+  try:
+    result = subprocess.run(
+      [github_cli, "auth", "status", "-h", "github.com"],
+      check=False,
+      capture_output=True,
+      text=True,
+      timeout=10,
+    )
+  except (OSError, subprocess.TimeoutExpired):
+    return False
+  return result.returncode == 0
+
+
 def doctor_workspace(root: Path) -> Dict[str, Any]:
   root = root.resolve()
   checks = []
@@ -443,15 +473,46 @@ def doctor_workspace(root: Path) -> Dict[str, Any]:
   github_config = workspace.get("integrations", {}).get("githubIssues", {})
   github_enabled = bool(github_config.get("enabled", False))
   github_cli = find_binary("gh")
+  github_repository = str(github_config.get("repository", "")).strip()
+  github_authenticated = github_auth_ready(github_cli) if github_enabled else True
+  github_ready = bool(github_cli and github_repository and github_authenticated) if github_enabled else True
   add(
     "github-issues",
-    bool(github_cli) if github_enabled else True,
-    github_enabled,
+    github_ready,
+    False,
     {
       "enabled": github_enabled,
-      "repository": github_config.get("repository", ""),
+      "repository": github_repository,
       "cli": github_cli or "not found",
+      "authenticated": github_authenticated,
     },
+  )
+
+  try:
+    retention_config = get_retention_config(root)
+    retention_ready = True
+    retention_detail: Any = retention_config
+  except MediaRetentionError as error:
+    retention_config = {
+      "enabled": False,
+      "retentionDays": DEFAULT_RETENTION_DAYS,
+      "minimumFreeBytes": DEFAULT_MINIMUM_FREE_BYTES,
+    }
+    retention_ready = False
+    retention_detail = str(error)
+  add("media-retention", retention_ready, True, retention_detail)
+
+  disk_status = disk_space_status(root) if retention_ready else {
+    "ready": False,
+    "freeBytes": shutil.disk_usage(root).free,
+    "minimumFreeBytes": retention_config["minimumFreeBytes"],
+    "retentionEnabled": False,
+  }
+  add(
+    "disk-space",
+    disk_status["ready"],
+    False,
+    {key: value for key, value in disk_status.items() if key != "ready"},
   )
 
   ignore_path = root / ".gitignore"
@@ -490,7 +551,14 @@ def doctor_workspace(root: Path) -> Dict[str, Any]:
     check["name"] for check in checks
     if check["required"] and check["status"] != "pass"
   ]
-  render_requirements = {"ffmpeg", "ffprobe", "pillow", "cover-font", "transcription-engine"}
+  render_requirements = {
+    "ffmpeg",
+    "ffprobe",
+    "pillow",
+    "cover-font",
+    "transcription-engine",
+    "disk-space",
+  }
   render_failures = [
     check["name"] for check in checks
     if check["name"] in render_requirements and check["status"] != "pass"
@@ -502,6 +570,7 @@ def doctor_workspace(root: Path) -> Dict[str, Any]:
     "readyForContent": valid,
     "readyForRender": valid and not render_failures,
     "loopReady": loop_ready,
+    "githubIssuesReady": github_ready,
     "personalizationStatus": personalization_status,
     "defaultContentType": system.get("defaultContentType"),
     "activeRelease": active_release,

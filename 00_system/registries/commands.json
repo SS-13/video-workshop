@@ -5,6 +5,7 @@
     "setup": {"owner": "video-production-bootstrap", "command": "python3 09_tools/vp.py init"},
     "doctor": {"owner": "video-production-bootstrap", "command": "python3 09_tools/vp.py doctor"},
     "context": {"owner": "video-production-bootstrap", "command": "python3 09_tools/vp.py context"},
+    "cleanup": {"owner": "video-diary-cleanup", "command": "python3 09_tools/vp.py cleanup"},
     "observe": {"owner": "video-production-evolution", "command": "python3 09_tools/vp.py observe"},
     "evolve": {"owner": "video-production-evolution", "command": "python3 09_tools/vp.py evolve"},
     "release:canary-check": {"owner": "video-production-release", "command": "python3 09_tools/vp.py release canary-check"},

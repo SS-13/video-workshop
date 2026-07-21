@@ -7,6 +7,7 @@
     "setup": "python3 09_tools/vp.py init",
     "doctor": "python3 09_tools/vp.py doctor",
     "context": "python3 09_tools/vp.py context",
+    "cleanup": "python3 09_tools/vp.py cleanup",
     "observe": "python3 09_tools/vp.py observe",
     "evolve": "python3 09_tools/vp.py evolve",
     "release:canary-check": "python3 09_tools/vp.py release canary-check",

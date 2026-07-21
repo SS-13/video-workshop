@@ -1,0 +1,31 @@
+{
+  "id": "OBS-20300101-1234567890",
+  "date": "2030-01-01",
+  "contentId": null,
+  "actor": "video-agent",
+  "source": "production-run",
+  "category": "bug",
+  "priority": "P1",
+  "scope": "system-core",
+  "affectedComponent": "subtitle-timing",
+  "summary": "Subtitle timing remains early after correction",
+  "evidence": {},
+  "triage": {
+    "workflowStep": "subtitle-review",
+    "reproduction": "Repeat the review with the same recording and corrected transcript",
+    "userImpact": "The subtitle timeline requires material rework",
+    "impactLevel": "high",
+    "priorityReason": "Reproducible and causes repeated correction work",
+    "proposedFix": "Re-align from word timing before segment generation",
+    "validationPlan": "Run subtitle timing QC and the regression test",
+    "processGate": "Add a subtitle timing input gate",
+    "reproducible": true,
+    "blocking": false,
+    "causesRework": true
+  },
+  "promoteRequested": false,
+  "deterministicFinding": false,
+  "countsAsOccurrence": true,
+  "createdAt": "2030-01-01T09:00:00+08:00",
+  "status": "observed"
+}

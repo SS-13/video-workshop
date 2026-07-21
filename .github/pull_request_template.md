@@ -24,6 +24,9 @@ What behavior, command, Skill, or rule changed?
 - [ ] Nightly Issue sync has applied `status:verified`
 - [ ] Use `Closes #<issue-number>` only after both checks above pass
 - [ ] Do not manually close a TopK Issue before the PR reaches `main`
+- [ ] Top-K repair branches use `fix/topk-<candidate-id>`
+- [ ] Top-K repair PRs are marked Ready for review before merge
+- [ ] Top-K repair PRs pass `vp evolve issues check-pr --require-topk`
 
 ## Rollback
 

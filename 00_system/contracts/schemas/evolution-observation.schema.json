@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "video-production/evolution-observation.schema.json",
+  "type": "object",
+  "required": [
+    "id",
+    "date",
+    "actor",
+    "source",
+    "category",
+    "priority",
+    "scope",
+    "affectedComponent",
+    "summary",
+    "triage",
+    "promoteRequested",
+    "deterministicFinding",
+    "countsAsOccurrence",
+    "createdAt",
+    "status"
+  ],
+  "properties": {
+    "id": {"type": "string"},
+    "date": {"type": "string"},
+    "contentId": {"type": ["string", "null"]},
+    "actor": {"type": "string"},
+    "source": {"type": "string"},
+    "category": {"type": "string"},
+    "priority": {"type": "string", "enum": ["P0", "P1", "P2", "P3"]},
+    "scope": {"type": "string"},
+    "affectedComponent": {"type": "string"},
+    "summary": {"type": "string"},
+    "evidence": {"type": "object"},
+    "triage": {
+      "type": "object",
+      "required": [
+        "workflowStep",
+        "reproduction",
+        "userImpact",
+        "impactLevel",
+        "priorityReason",
+        "proposedFix",
+        "validationPlan",
+        "processGate",
+        "reproducible",
+        "blocking",
+        "causesRework"
+      ],
+      "properties": {
+        "workflowStep": {"type": "string"},
+        "reproduction": {"type": "string"},
+        "userImpact": {"type": "string"},
+        "impactLevel": {
+          "type": "string",
+          "enum": ["unknown", "low", "medium", "high", "critical"]
+        },
+        "priorityReason": {"type": "string"},
+        "proposedFix": {"type": "string"},
+        "validationPlan": {"type": "string"},
+        "processGate": {"type": "string"},
+        "reproducible": {"type": "boolean"},
+        "blocking": {"type": "boolean"},
+        "causesRework": {"type": "boolean"}
+      }
+    },
+    "promoteRequested": {"type": "boolean"},
+    "deterministicFinding": {"type": "boolean"},
+    "countsAsOccurrence": {"type": "boolean"},
+    "createdAt": {"type": "string"},
+    "status": {"type": "string", "enum": ["observed"]}
+  }
+}

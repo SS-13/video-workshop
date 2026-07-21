@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 4,
+  "schemaVersion": 7,
   "topK": 3,
   "lookbackDays": 7,
   "repeatThreshold": 2,
@@ -7,18 +7,30 @@
   "candidateRules": {
     "explicitPromotionRequest": true,
     "repeatedObservation": true,
-    "p0AlwaysEligible": true,
-    "deterministicFinding": true
+    "p0AlwaysEligible": false,
+    "deterministicFinding": true,
+    "reproducibleObservation": true,
+    "productionBlocking": true,
+    "materialRework": true,
+    "highImpact": true
   },
   "selection": {
-    "freezeDailyTopK": true,
+    "mode": "rolling",
+    "freezeDailyTopK": false,
     "carryForwardBacklog": true,
+    "refillCompletedSlots": true,
     "priorityAging": {
       "enabled": true,
       "daysPerLevel": 1,
       "maximumPriority": "P0",
       "p0OldestFirst": true
     }
+  },
+  "realtime": {
+    "enabled": true,
+    "triggers": ["observe", "evolve", "complete"],
+    "syncGitHubOnChange": true,
+    "githubFailureIsBlocking": false
   },
   "githubIssues": {
     "enabledByDefault": false,

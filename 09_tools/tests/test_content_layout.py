@@ -12,12 +12,24 @@ MODULE_PATH = TOOLS_ROOT / "migrate-date-first-layout.py"
 SPEC = importlib.util.spec_from_file_location("migrate_date_first_layout", MODULE_PATH)
 MIGRATION = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MIGRATION)
+NEW_DAY_PATH = TOOLS_ROOT / "new-day.py"
+NEW_DAY_SPEC = importlib.util.spec_from_file_location("new_day", NEW_DAY_PATH)
+NEW_DAY = importlib.util.module_from_spec(NEW_DAY_SPEC)
+NEW_DAY_SPEC.loader.exec_module(NEW_DAY)
 
 from video_production_core.content_layout import ContentRef, next_sequence  # noqa: E402
 from video_production_core.run_store import default_run_id  # noqa: E402
 
 
 class ContentLayoutTest(unittest.TestCase):
+  def test_new_day_inbox_tracks_idea_provenance(self):
+    ref = ContentRef("2026-07-17", "video-diary", "001")
+
+    inbox = NEW_DAY.templates(ref, 45)["01_inbox"]
+
+    self.assertIn("- 灵感来源：待确认", inbox)
+    self.assertIn("- Sparkling ID：-", inbox)
+
   def test_paths_are_date_first_for_every_content_type(self):
     root = Path("/workspace")
     ref = ContentRef("2026-07-14", "reading-note", "2")

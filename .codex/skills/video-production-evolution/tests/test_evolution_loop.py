@@ -231,6 +231,34 @@ class EvolutionLoopTest(unittest.TestCase):
       [item["summary"] for item in next_state["backlog"]],
     )
 
+  def test_report_lists_completed_candidates_separately_from_active_work(self):
+    target = "2026-07-13"
+    self.append_observations(target, [
+      {"summary": "已完成的能力", "priority": "P0", "promoteRequested": True},
+      {"summary": "仍待处理的能力", "priority": "P1", "promoteRequested": True},
+    ])
+    first = run_evolution(self.root, target)
+    evidence = self.root / "completion-report.txt"
+    evidence.write_text("passed\n", encoding="utf-8")
+
+    completed = complete_candidate(
+      self.root,
+      target,
+      first["topK"][0]["id"],
+      "bugfix",
+      [str(evidence)],
+      actor="test",
+      process_action="test",
+    )
+    state = json.loads((self.root / completed["statePath"]).read_text(encoding="utf-8"))
+    report = (self.root / completed["reportPath"]).read_text(encoding="utf-8")
+
+    self.assertEqual(state["outputSchemaVersion"], 2)
+    self.assertEqual(state["completed"][0]["candidateId"], first["topK"][0]["id"])
+    self.assertIn("## 已完成候选", report)
+    self.assertIn("已完成的能力", report)
+    self.assertIn("仍待处理的能力", report)
+
   def test_unfinished_top_k_is_re_ranked_on_the_next_day(self):
     first_date = "2026-07-12"
     next_date = "2026-07-13"

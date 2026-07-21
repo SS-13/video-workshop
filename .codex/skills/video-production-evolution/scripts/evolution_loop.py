@@ -16,6 +16,7 @@ import uuid
 
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+EVOLUTION_OUTPUT_SCHEMA_VERSION = 2
 VALID_PRIORITIES = ("P0", "P1", "P2", "P3")
 VALID_CATEGORIES = {
   "bug",
@@ -695,6 +696,7 @@ def build_report(state: Dict[str, Any]) -> str:
     f"- 去重后更新：`{state['summary']['deduplicatedUpdateCount']}`",
     f"- Issue-ready Candidate：`{state['summary']['eligibleCandidateCount']}`",
     f"- Backlog：`{state['summary']['backlogCount']}`",
+    f"- 完成账本：`{state['summary'].get('completedCandidateCount', 0)}`",
     f"- TopK 已完成：`{state['summary'].get('completedTopKCount', 0)}`",
     f"- 本次进入/退出：`{len(changes.get('entered', []))}/{len(changes.get('exited', []))}`",
     "",
@@ -714,6 +716,24 @@ def build_report(state: Dict[str, Any]) -> str:
       )
   else:
     lines.append("今日没有达到 Top-K Issue 门槛的更新。")
+
+  completed_items = state.get("completed", [])
+  lines.extend(["", "## 已完成候选", ""])
+  if completed_items:
+    lines.extend([
+      "| Status | Candidate | Completed at | Type | Release | Summary |",
+      "| --- | --- | --- | --- | --- | --- |",
+    ])
+    for item in completed_items:
+      lines.append(
+        f"| completed | `{markdown_cell(item.get('candidateId', ''))}` | "
+        f"{markdown_cell(item.get('completedAt', ''))} | "
+        f"{markdown_cell(item.get('changeType', ''))} | "
+        f"{markdown_cell(item.get('recommendedSemVer', ''))} | "
+        f"{markdown_cell(item.get('summary', ''))} |"
+      )
+  else:
+    lines.append("暂无已登记完成候选。")
 
   lines.extend(["", "## Backlog", ""])
   if state["backlog"]:
@@ -1092,6 +1112,24 @@ def run_evolution(
       else set()
     )
     completed_candidates = load_completed_candidates(root)
+    completed_items = sorted(
+      [
+        {
+          "candidateId": item.get("candidateId", ""),
+          "summary": item.get("summary", ""),
+          "completedAt": item.get("completedAt", ""),
+          "changeType": item.get("changeType", ""),
+          "recommendedSemVer": item.get("recommendedSemVer", ""),
+          "completionRecord": item.get("completionRecord", ""),
+        }
+        for item in completed_candidates.values()
+      ],
+      key=lambda item: (
+        str(item.get("completedAt", "")),
+        str(item.get("candidateId", "")),
+      ),
+      reverse=True,
+    )
     updates = group_updates(
       observations,
       target_date,
@@ -1129,6 +1167,7 @@ def run_evolution(
     backlog = [item for item in backlog if item["id"] not in completed_ids]
     today_observations = [item for item in observations if item["date"] == target_date]
     input_payload = {
+      "outputSchemaVersion": EVOLUTION_OUTPUT_SCHEMA_VERSION,
       "date": target_date,
       "topK": top_k,
       "policy": policy,
@@ -1172,6 +1211,7 @@ def run_evolution(
     )
     state = {
       "schemaVersion": 1,
+      "outputSchemaVersion": EVOLUTION_OUTPUT_SCHEMA_VERSION,
       "date": target_date,
       "systemVersion": system_version(root),
       "policyVersion": policy.get("schemaVersion", 1),
@@ -1183,6 +1223,7 @@ def run_evolution(
       "inputHash": input_hash,
       "generatedAt": now_iso(),
       "topK": selected,
+      "completed": completed_items,
       "backlog": backlog,
       "summary": {
         "todayObservationCount": len(today_observations),

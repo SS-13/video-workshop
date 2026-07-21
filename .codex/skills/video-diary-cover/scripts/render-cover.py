@@ -215,6 +215,20 @@ def fit_font(draw, text, start, min_size, max_width, stroke_width=0, font_candid
   return load_font(min_size, candidates, strict=True)
 
 
+def fit_title_font(draw, text, start, min_size, max_width, stroke_width=0, font_candidates=None):
+  """Preserve the style baseline, but keep long approved title text usable."""
+  adaptive_min_size = max(56, int(min_size * 0.68))
+  return fit_font(
+    draw,
+    text,
+    start,
+    adaptive_min_size,
+    max_width,
+    stroke_width=stroke_width,
+    font_candidates=font_candidates,
+  )
+
+
 def crop_to_cover(image):
   src_width, src_height = image.size
   crop_height = int(src_width * COVER_HEIGHT / COVER_WIDTH)
@@ -475,7 +489,7 @@ def render_cover(args):
 
   title_font_candidates = style.get("titleFonts", DISPLAY_FONTS)
   title_outline_width = int(style.get("titleOutlineWidth", 5))
-  title_1_font = fit_font(
+  title_1_font = fit_title_font(
     draw,
     title_line_1,
     int(style.get("title1StartSize", 224)),
@@ -484,7 +498,7 @@ def render_cover(args):
     stroke_width=title_outline_width,
     font_candidates=title_font_candidates,
   )
-  title_2_font = fit_font(
+  title_2_font = fit_title_font(
     draw,
     title_line_2 or "",
     int(style.get("title2StartSize", 202)),
@@ -520,6 +534,7 @@ def render_cover(args):
     "styleVersion": style_version,
     "title": [title_line_1, title_line_2],
     "titleWidths": [title_1_width, title_2_width],
+    "titleFontSizes": [getattr(title_1_font, "size", None), getattr(title_2_font, "size", None)],
     "fontNames": [getattr(title_1_font, "getname", lambda: ("unknown", "unknown"))()[0]],
     "fontFiles": sorted({
       str(getattr(font, "path", ""))

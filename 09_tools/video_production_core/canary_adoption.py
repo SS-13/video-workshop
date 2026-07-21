@@ -329,38 +329,41 @@ def adopt_canary_run(
   if not candidate:
     raise RunStateError("No candidate release is configured.")
 
-  adoption_mode = "native-canary-package"
-  if production.get("systemVersion") != candidate:
-    safe_content_id = re.sub(r"[^A-Za-z0-9._-]+", "-", content_id).strip("-") or "content"
-    run_id = validate_run_id(f"{safe_content_id}-canary-{candidate}")
-    package = json.loads(json.dumps(package, ensure_ascii=False))
-    package["runId"] = run_id
-    package["production"]["systemVersion"] = candidate
-    package["generatedAt"] = now_iso()
-    package["canary"] = {
-      "mode": "stable-artifact-adoption",
-      "mediaReencoded": False,
-      "sourceRunId": source_run_id,
-      "sourceSystemVersion": production.get("systemVersion"),
-      "sourcePackage": relative_or_absolute(root, source_package_path),
-    }
-    package_path = (
-      root
-      / "00_state"
-      / "releases"
-      / candidate
-      / "canary"
-      / date
-      / safe_content_id
-      / "publish-package.json"
-    )
-    candidate_errors = validate_value(package, schema)
-    if candidate_errors:
-      raise RunStateError("Invalid Canary package: " + "; ".join(candidate_errors))
-    atomic_write_json(package_path, package)
-    adoption_mode = "stable-artifact-adoption"
+  safe_content_id = re.sub(r"[^A-Za-z0-9._-]+", "-", content_id).strip("-") or "content"
+  source_version = str(production.get("systemVersion", ""))
+  if source_version == candidate:
+    adoption_mode = "active-candidate-revalidation"
+    canary_mode = "active-candidate-revalidation"
   else:
-    run_id = validate_run_id(source_run_id)
+    adoption_mode = "stable-artifact-adoption"
+    canary_mode = "stable-artifact-adoption"
+
+  run_id = validate_run_id(f"{safe_content_id}-canary-{candidate}")
+  package = json.loads(json.dumps(package, ensure_ascii=False))
+  package["runId"] = run_id
+  package["production"]["systemVersion"] = candidate
+  package["generatedAt"] = now_iso()
+  package["canary"] = {
+    "mode": canary_mode,
+    "mediaReencoded": False,
+    "sourceRunId": source_run_id,
+    "sourceSystemVersion": source_version,
+    "sourcePackage": relative_or_absolute(root, source_package_path),
+  }
+  package_path = (
+    root
+    / "00_state"
+    / "releases"
+    / candidate
+    / "canary"
+    / date
+    / safe_content_id
+    / "publish-package.json"
+  )
+  candidate_errors = validate_value(package, schema)
+  if candidate_errors:
+    raise RunStateError("Invalid Canary package: " + "; ".join(candidate_errors))
+  atomic_write_json(package_path, package)
 
   finalized = finalize_prepared_run(
     root,

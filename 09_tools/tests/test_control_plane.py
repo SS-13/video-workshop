@@ -1004,6 +1004,7 @@ class CanaryValidationTest(unittest.TestCase):
     with tempfile.TemporaryDirectory() as directory:
       root = Path(directory)
       run_id, _ = self.make_canary_workspace(root, write_run=False)
+      canary_run_id = f"{run_id}-canary-3.0.0"
       protected_paths = [
         root / "04_videos" / "2026-07-13" / "video-diary" / "001" / "subtitles" / "corrected.srt",
         root / "05_exports" / "2026-07-13" / "video-diary" / "001" / "final.mp4",
@@ -1016,8 +1017,9 @@ class CanaryValidationTest(unittest.TestCase):
       result = adopt_canary_run(root, date="2026-07-13", actor="test")
 
       self.assertFalse(result["reused"])
+      self.assertEqual(result["adoptionMode"], "active-candidate-revalidation")
       self.assertTrue(result["validation"]["valid"], result["validation"]["checks"])
-      run = get_run(root, run_id)
+      run = get_run(root, canary_run_id)
       self.assertEqual(run["channel"], "canary")
       self.assertEqual(run["currentStage"], "completed")
       self.assertTrue(run["publishReady"])
@@ -1026,7 +1028,7 @@ class CanaryValidationTest(unittest.TestCase):
       revision = run["revision"]
       repeated = adopt_canary_run(root, date="2026-07-13", actor="test")
       self.assertTrue(repeated["reused"])
-      self.assertEqual(get_run(root, run_id)["revision"], revision)
+      self.assertEqual(get_run(root, canary_run_id)["revision"], revision)
 
   def test_adopt_rejects_not_ready_package_without_creating_run(self):
     with tempfile.TemporaryDirectory() as directory:
@@ -1041,6 +1043,7 @@ class CanaryValidationTest(unittest.TestCase):
         adopt_canary_run(root, date="2026-07-13", actor="test")
 
       self.assertFalse((root / "00_state" / "runs" / run_id / "run.json").exists())
+      self.assertFalse((root / "00_state" / "runs" / f"{run_id}-canary-3.0.0" / "run.json").exists())
       system = json.loads((root / "00_system" / "system.json").read_text(encoding="utf-8"))
       package = json.loads((root / "package.json").read_text(encoding="utf-8"))
       self.assertEqual(system["activeRelease"], "2.1.0")

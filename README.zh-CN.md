@@ -355,6 +355,8 @@ Top-K 修复分支统一使用 `fix/topk-<candidate-id>`，PR 必须关联已验
 退出 Draft，目标为 `main`，并通过全部必需检查。仓库中的
 `.github/workflows/topk-merge.yml` 只对同仓库的 Top-K 修复分支启用自动合并，
 不执行 PR 分支代码；合并进入 `main` 后由可信的合并后收口任务关闭已验证 Issue。
+收口任务同时监听 PR 关闭事件和测试成功后的 `workflow_run`，并在自动合并落地后
+再次确认 PR 已进入默认分支。
 普通 PR 不会被这条规则误合并，Fork PR 也不会自动合并。收口任务只处理 PR
 正文明确引用、仍带有 `topk` 和 `status:verified` 的 Issue。
 

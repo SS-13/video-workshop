@@ -354,8 +354,19 @@ python3 09_tools/vp.py evolve issues merge \
 Top-K 修复分支统一使用 `fix/topk-<candidate-id>`，PR 必须关联已验证的 Issue，
 退出 Draft，目标为 `main`，并通过全部必需检查。仓库中的
 `.github/workflows/topk-merge.yml` 只对同仓库的 Top-K 修复分支启用自动合并，
-不执行 PR 分支代码；合并进入 `main` 后由 GitHub 自动关闭 Issue。普通 PR 不会
-被这条规则误合并，Fork PR 也不会自动合并。
+不执行 PR 分支代码；合并进入 `main` 后由可信的合并后收口任务关闭已验证 Issue。
+普通 PR 不会被这条规则误合并，Fork PR 也不会自动合并。收口任务只处理 PR
+正文明确引用、仍带有 `topk` 和 `status:verified` 的 Issue。
+
+需要手工检查或补偿一次已完成合并时，可以先预览：
+
+```bash
+python3 09_tools/vp.py evolve issues reconcile \
+  --repo OWNER/REPO --pr N
+```
+
+确认 PR 已合并到默认分支且目标 Issue 已本地验证后，再加 `--apply`。这个命令
+不会关闭普通 Issue、未验证 Issue、Fork PR 或未合并 PR。
 
 完成态的 CLI、Schema、测试和默认规则属于公开框架；真实完成清单、验收证据和
 个人产物仍保留在被 Git 忽略的本地工作区。

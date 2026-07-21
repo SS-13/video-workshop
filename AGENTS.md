@@ -215,6 +215,12 @@ checks pass. Do not run this loop while a production lock is active, and do not
 modify the Stable production path as part of an Issue repair without the normal
 Canary and release gates.
 
+After a same-repository `fix/topk-*` PR is actually merged into the default branch,
+the trusted `pull_request_target.closed` job runs
+`vp evolve issues reconcile --repo OWNER/REPO --pr N --apply`. It closes only
+referenced Issues that still have both `topk` and `status:verified`; ordinary,
+unverified, fork, non-default-branch, or unmerged references remain open.
+
 ### Production blockers
 
 - Record every meaningful production blocker as an Observation with stage,

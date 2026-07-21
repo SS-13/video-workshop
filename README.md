@@ -395,9 +395,17 @@ python3 09_tools/vp.py evolve issues merge \
 task. Top-K repair branches use `fix/topk-<candidate-id>`. A repair PR must target
 `main`, be Ready for review, reference a verified Top-K Issue, and pass all required
 checks. `.github/workflows/topk-merge.yml` enables auto-merge only for same-repository
-Top-K repair branches and never executes PR branch code. GitHub closes the Issue only
-after the PR reaches `main`; Fork PRs and ordinary PRs are not auto-merged by this
-workflow.
+Top-K repair branches and never executes PR branch code. After the PR reaches `main`,
+its trusted post-merge job closes only referenced Issues that still have both `topk`
+and `status:verified`; Fork PRs, ordinary PRs, and unverified Issues are left alone.
+
+To inspect or compensate for one already merged repair PR, preview the post-merge
+reconciliation first and add `--apply` only after the target is confirmed:
+
+```bash
+python3 09_tools/vp.py evolve issues reconcile --repo OWNER/REPO --pr N
+python3 09_tools/vp.py evolve issues reconcile --repo OWNER/REPO --pr N --apply
+```
 
 ## Optional Integrations
 

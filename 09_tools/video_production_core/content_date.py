@@ -16,7 +16,9 @@ def default_content_date(
   if boundary_hour < 0 or boundary_hour > 23:
     raise ValueError("Content day boundary hour must be between 0 and 23.")
 
-  local_now = (now or datetime.now().astimezone()).astimezone()
+  local_now = now or datetime.now().astimezone()
+  if local_now.tzinfo is None:
+    local_now = local_now.astimezone()
   if local_now.hour < boundary_hour:
     local_now -= timedelta(days=1)
   return local_now.date().isoformat()

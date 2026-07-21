@@ -1,6 +1,7 @@
 from pathlib import Path
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -18,10 +19,18 @@ SPEC.loader.exec_module(RENDER_COVER)
 
 class CoverGlyphQcTest(unittest.TestCase):
   def font_path(self):
-    for value in RENDER_COVER.DISPLAY_FONTS:
+    candidates = [
+      *RENDER_COVER.DISPLAY_FONTS,
+      "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+      "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+    ]
+    for value in candidates:
       if Path(value).is_file():
         return value
     self.skipTest("No configured cover font is installed")
+
+  def run_environment(self):
+    return {**os.environ, "VIDEO_WORKSHOP_FONT": self.font_path()}
 
   def test_font_supports_ascii_and_rejects_unmapped_codepoint(self):
     from PIL import ImageFont
@@ -52,6 +61,7 @@ class CoverGlyphQcTest(unittest.TestCase):
         text=True,
         capture_output=True,
         check=False,
+        env=self.run_environment(),
       )
 
       self.assertNotEqual(result.returncode, 0)
@@ -59,6 +69,12 @@ class CoverGlyphQcTest(unittest.TestCase):
       self.assertEqual(json.loads(qc_path.read_text(encoding="utf-8"))["passed"], False)
 
   def test_v131_fits_long_mixed_title(self):
+    from PIL import ImageFont
+
+    font = ImageFont.truetype(self.font_path(), 64)
+    if RENDER_COVER.missing_glyphs(font, "在WAIC，看见未来，也看见好问题"):
+      self.skipTest("No installed CJK font can render the mixed Chinese title")
+
     with tempfile.TemporaryDirectory() as directory:
       root = Path(directory)
       base = root / "base.jpg"
@@ -81,6 +97,7 @@ class CoverGlyphQcTest(unittest.TestCase):
         text=True,
         capture_output=True,
         check=False,
+        env=self.run_environment(),
       )
 
       self.assertEqual(result.returncode, 0, result.stderr or result.stdout)

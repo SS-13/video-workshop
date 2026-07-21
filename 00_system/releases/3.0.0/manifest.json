@@ -72,6 +72,11 @@
     "releaseAgent": ".codex/agents/release-agent.md",
     "activeRunCommand": "python3 09_tools/vp.py run finalize-active --date <YYYY-MM-DD>",
     "cleanClone": "setup + complete private workspace + doctor + Day1 + Observation + locked TopK pass",
-    "privateMediaEvidencePublished": false
+    "privateMediaEvidencePublished": false,
+    "realVideoCanary": {
+      "runId": "2026-07-19_Day47-canary-3.0.0",
+      "checkedAt": "2026-07-21T12:06:53+08:00",
+      "checkedBy": "system-steward-agent"
+    }
   }
 }

@@ -611,6 +611,12 @@ class GitHubClient:
       {"title": title, "body": body, "labels": labels},
     )
 
+  def close_issue(self, number: int) -> Dict[str, Any]:
+    return self._run(
+      ["--method", "PATCH", f"repos/{self.repository}/issues/{number}"],
+      {"state": "closed", "state_reason": "completed"},
+    )
+
   def get_issue(self, number: int) -> Dict[str, Any]:
     return self._run([f"repos/{self.repository}/issues/{number}"])
 
@@ -992,5 +998,74 @@ def check_pull_request_merge_gate(
     "valid": not violations,
     "checks": checks,
     "uncheckedCanaryGates": unchecked_canary,
+    "violations": violations,
+  }
+
+
+def reconcile_merged_pull_request(
+  client: GitHubClient,
+  pull_number: int,
+  apply: bool = False,
+) -> Dict[str, Any]:
+  """Close only verified Top-K issues referenced by a merged repair PR."""
+  pull = client.get_pull_request(pull_number)
+  default_branch = client.default_branch()
+  base_branch = str(pull.get("base", {}).get("ref", ""))
+  head = pull.get("head", {}) if isinstance(pull.get("head", {}), dict) else {}
+  head_repository = str(head.get("repo", {}).get("full_name", ""))
+  head_branch = str(head.get("ref", ""))
+  violations = []
+
+  if not bool(pull.get("merged", False)):
+    violations.append(f"Pull request #{pull_number} is not merged.")
+  if base_branch != default_branch:
+    violations.append(
+      f"Merged Top-K repairs may close issues only through the default branch: {default_branch}."
+    )
+  if head_repository != client.repository:
+    violations.append("Only same-repository Top-K repair PRs may close managed issues.")
+  if not head_branch.startswith("fix/topk-"):
+    violations.append("Only fix/topk-* repair branches may close managed issues.")
+
+  closing_numbers = closing_issue_numbers(str(pull.get("body", "")))
+  eligible = []
+  skipped = []
+  already_closed = []
+  closed = []
+  if not violations:
+    for issue_number in closing_numbers:
+      issue = client.get_issue(issue_number)
+      labels = issue_label_names(issue)
+      if "topk" not in labels:
+        skipped.append({"number": issue_number, "reason": "unmanaged-issue"})
+        continue
+      if "status:verified" not in labels:
+        skipped.append({"number": issue_number, "reason": "not-verified"})
+        continue
+      if str(issue.get("state", "open")) == "closed":
+        already_closed.append(issue_number)
+        continue
+      eligible.append(issue_number)
+
+    if apply:
+      for issue_number in eligible:
+        client.close_issue(issue_number)
+        closed.append(issue_number)
+
+  return {
+    "valid": not violations,
+    "repository": client.repository,
+    "pullNumber": pull_number,
+    "merged": bool(pull.get("merged", False)),
+    "baseBranch": base_branch,
+    "defaultBranch": default_branch,
+    "headRepository": head_repository,
+    "headBranch": head_branch,
+    "closingIssueNumbers": closing_numbers,
+    "eligibleIssues": eligible,
+    "skippedIssues": skipped,
+    "alreadyClosedIssues": already_closed,
+    "closedIssues": closed,
+    "apply": apply,
     "violations": violations,
   }

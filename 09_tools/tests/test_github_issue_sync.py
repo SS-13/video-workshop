@@ -17,19 +17,34 @@ from video_production_core.github_issue_sync import (
   check_pull_request_merge_gate,
   check_pull_request_issue_gate,
   closing_issue_numbers,
+  reconcile_merged_pull_request,
   sync_topk_issues,
 )
 
 
 class FakeGitHubClient:
-  def __init__(self, issues=None, pull_body="", base_branch="main", draft=False, checks=None):
+  def __init__(
+    self,
+    issues=None,
+    pull_body="",
+    base_branch="main",
+    draft=False,
+    checks=None,
+    merged=False,
+    head_branch="fix/topk-test",
+    head_repository=None,
+  ):
     self.repository = "example/video-workshop"
     self.issues = list(issues or [])
     self.pull_body = pull_body
     self.base_branch = base_branch
     self.draft = draft
     self.checks = checks or {"status": "success", "checks": [{"name": "test", "state": "SUCCESS"}]}
+    self.merged = merged
+    self.headBranch = head_branch
+    self.headRepository = head_repository or self.repository
     self.merges = []
+    self.closedIssues = []
     self.labelsEnsured = 0
 
   def ensure_labels(self):
@@ -59,6 +74,12 @@ class FakeGitHubClient:
     })
     return issue
 
+  def close_issue(self, number):
+    issue = self.get_issue(number)
+    issue.update({"state": "closed", "state_reason": "completed"})
+    self.closedIssues.append(number)
+    return issue
+
   def get_issue(self, number):
     return next(item for item in self.issues if item["number"] == number)
 
@@ -67,6 +88,11 @@ class FakeGitHubClient:
       "number": number,
       "body": self.pull_body,
       "base": {"ref": self.base_branch},
+      "head": {
+        "ref": self.headBranch,
+        "repo": {"full_name": self.headRepository},
+      },
+      "merged": self.merged,
       "draft": self.draft,
     }
 
@@ -413,6 +439,77 @@ class GitHubIssueSyncTest(unittest.TestCase):
     self.assertFalse(result["valid"])
     self.assertEqual(len(result["uncheckedCanaryGates"]), 1)
     self.assertTrue(any("unchecked Canary" in item for item in result["violations"]))
+
+  def test_reconcile_closes_only_verified_managed_issues_after_merge(self):
+    verified_issue = {
+      "number": 7,
+      "title": "Verified repair",
+      "body": "",
+      "labels": [{"name": "topk"}, {"name": "status:verified"}],
+      "state": "open",
+    }
+    pending_issue = {
+      "number": 8,
+      "title": "Pending repair",
+      "body": "",
+      "labels": [{"name": "topk"}, {"name": "status:topk"}],
+      "state": "open",
+    }
+    unrelated_issue = {
+      "number": 9,
+      "title": "Unrelated issue",
+      "body": "",
+      "labels": [{"name": "status:verified"}],
+      "state": "open",
+    }
+    client = FakeGitHubClient(
+      [verified_issue, pending_issue, unrelated_issue],
+      pull_body="Closes #7\nCloses #8\nCloses #9",
+      merged=True,
+    )
+
+    result = reconcile_merged_pull_request(client, 40, apply=True)
+
+    self.assertTrue(result["valid"])
+    self.assertEqual(result["eligibleIssues"], [7])
+    self.assertEqual(result["closedIssues"], [7])
+    self.assertEqual(result["alreadyClosedIssues"], [])
+    self.assertEqual(client.closedIssues, [7])
+    self.assertEqual(client.get_issue(7)["state"], "closed")
+    self.assertEqual(client.get_issue(8)["state"], "open")
+    self.assertEqual(client.get_issue(9)["state"], "open")
+    self.assertEqual(
+      {item["number"]: item["reason"] for item in result["skippedIssues"]},
+      {8: "not-verified", 9: "unmanaged-issue"},
+    )
+
+    repeated = reconcile_merged_pull_request(client, 40, apply=True)
+    self.assertEqual(repeated["closedIssues"], [])
+    self.assertEqual(repeated["alreadyClosedIssues"], [7])
+    self.assertEqual(client.closedIssues, [7])
+
+  def test_reconcile_rejects_unmerged_or_non_topk_branch(self):
+    issue = {
+      "number": 7,
+      "title": "Verified repair",
+      "body": "",
+      "labels": [{"name": "topk"}, {"name": "status:verified"}],
+      "state": "open",
+    }
+    client = FakeGitHubClient(
+      [issue],
+      pull_body="Closes #7",
+      merged=False,
+      head_branch="feature/unrelated",
+    )
+
+    result = reconcile_merged_pull_request(client, 40, apply=True)
+
+    self.assertFalse(result["valid"])
+    self.assertEqual(result["closedIssues"], [])
+    self.assertEqual(client.get_issue(7)["state"], "open")
+    self.assertTrue(any("not merged" in item for item in result["violations"]))
+    self.assertTrue(any("fix/topk-*" in item for item in result["violations"]))
 
   def test_work_packet_resolves_issue_and_completion_command(self):
     target = "2030-01-01"

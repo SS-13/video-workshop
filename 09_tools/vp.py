@@ -59,6 +59,7 @@ from video_production_core.github_issue_sync import (  # noqa: E402
   build_issue_work_packet,
   check_pull_request_merge_gate,
   check_pull_request_issue_gate,
+  reconcile_merged_pull_request,
   resolve_repository,
   sync_topk_issues,
 )
@@ -398,6 +399,18 @@ def build_parser() -> argparse.ArgumentParser:
     help="Queue GitHub auto-merge instead of merging immediately",
   )
   add_common_json_flag(evolve_issue_merge)
+  evolve_issue_reconcile = evolve_issue_subparsers.add_parser(
+    "reconcile",
+    help="Close verified Top-K issues after a repair PR reaches the default branch",
+  )
+  evolve_issue_reconcile.add_argument("--repo", required=True, help="GitHub repository as OWNER/REPO")
+  evolve_issue_reconcile.add_argument("--pr", type=int, required=True, help="Merged pull request number")
+  evolve_issue_reconcile.add_argument(
+    "--apply",
+    action="store_true",
+    help="Close eligible verified issues; without it only report the reconciliation plan",
+  )
+  add_common_json_flag(evolve_issue_reconcile)
 
   system = subparsers.add_parser("system", help="Inspect the generic control plane")
   system_subparsers = system.add_subparsers(dest="system_action", required=True)
@@ -995,6 +1008,30 @@ def handle_evolve_issues(root: Path, args: argparse.Namespace) -> int:
         print(f"merge_output={result['merge']['output']}")
       else:
         print(f"merge_action={result['merge'].get('reason', 'applied')}")
+    return 0 if result["valid"] else 2
+
+  if args.evolve_issue_action == "reconcile":
+    result = reconcile_merged_pull_request(
+      GitHubClient(args.repo),
+      args.pr,
+      apply=args.apply,
+    )
+    if args.json:
+      print_json(json_envelope(root, result))
+    else:
+      print(f"valid={str(result['valid']).lower()}")
+      print(f"pull_number={result['pullNumber']}")
+      print(f"merged={str(result['merged']).lower()}")
+      print(f"base_branch={result['baseBranch']}")
+      print(f"default_branch={result['defaultBranch']}")
+      print(f"head_branch={result['headBranch']}")
+      print(f"closing_issue_numbers={','.join(str(value) for value in result['closingIssueNumbers'])}")
+      print(f"eligible_issues={','.join(str(value) for value in result['eligibleIssues'])}")
+      print(f"closed_issues={','.join(str(value) for value in result['closedIssues'])}")
+      print(f"already_closed_issues={','.join(str(value) for value in result['alreadyClosedIssues'])}")
+      print(f"skipped_issues={len(result['skippedIssues'])}")
+      for violation in result["violations"]:
+        print(f"violation={violation}")
     return 0 if result["valid"] else 2
 
   raise GitHubIssueSyncError(f"Unknown evolve issues action: {args.evolve_issue_action}")

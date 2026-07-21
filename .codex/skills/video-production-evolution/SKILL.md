@@ -193,8 +193,11 @@ blocker -> Observation -> finish through stable workaround/fallback
 ```
 
 The daily report includes a `生产问题清单` view derived from production-related
-Observations. `needs-evidence` means triage is still pending; `parked-topk` means
-the issue is confirmed but waiting for a later engineering round.
+Observations. It also includes a separate completed-candidate view sourced from
+the append-only completion ledger, so historical completed work is not confused
+with active Top-K or backlog work. `needs-evidence` means triage is still pending;
+`parked-topk` means the issue is confirmed but waiting for a later engineering
+round.
 
 Error report:
 

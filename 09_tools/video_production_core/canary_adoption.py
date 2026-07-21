@@ -19,6 +19,7 @@ from video_production_core.run_store import (
   start_run,
   validate_run_id,
 )
+from video_production_core.content_layout import ContentRef
 
 
 MIME_TYPES = {
@@ -72,17 +73,29 @@ def production_path(root: Path, path: Path, expected_root: str, label: str) -> N
     raise RunStateError(f"{label} is not a real production artifact: {relative}")
 
 
-def optional_script(root: Path, date: str, explicit: Optional[str]) -> Optional[Path]:
+def optional_script(
+  root: Path,
+  date: str,
+  explicit: Optional[str],
+  content_type: str = "video-diary",
+  sequence: str = "001",
+) -> Optional[Path]:
   if explicit:
     return require_file(root, explicit, "script")
-  candidate = root / "02_scripts" / f"{date}.md"
+  candidate = ContentRef(date, content_type, sequence).text_path(root, "02_scripts")
   return candidate.resolve() if candidate.is_file() else None
 
 
-def optional_recording(root: Path, date: str, explicit: Optional[str]) -> Optional[Path]:
+def optional_recording(
+  root: Path,
+  date: str,
+  explicit: Optional[str],
+  content_type: str = "video-diary",
+  sequence: str = "001",
+) -> Optional[Path]:
   if explicit:
     return require_file(root, explicit, "recording")
-  directory = root / "03_recordings" / date
+  directory = ContentRef(date, content_type, sequence).media_dir(root, "03_recordings")
   if not directory.exists():
     return None
   candidates = [
@@ -159,6 +172,7 @@ def finalize_prepared_run(
   script_path: Optional[str],
   recording_path: Optional[str],
   actor: str,
+  sequence: str = "001",
 ) -> Dict[str, Any]:
   if package.get("publishReady") is not True:
     raise RunStateError("Run finalization requires publishReady=true.")
@@ -186,8 +200,8 @@ def finalize_prepared_run(
   production_path(root, cover_4x3, "05_exports", "4:3 cover")
   production_path(root, srt, "04_videos", "Corrected SRT")
 
-  script = optional_script(root, date, script_path)
-  recording = optional_recording(root, date, recording_path)
+  script = optional_script(root, date, script_path, content_type, sequence)
+  recording = optional_recording(root, date, recording_path, content_type, sequence)
   publish_markdown = package_path.parent / "PUBLISH.md"
   run = start_run(
     root,
@@ -197,6 +211,7 @@ def finalize_prepared_run(
     run_id=run_id,
     channel=channel,
     actor=actor,
+    sequence=sequence,
   )
   if run.get("reused") and run.get("currentStage") == "completed":
     return {"run": run, "productionStats": stats, "reused": True}
@@ -279,11 +294,15 @@ def adopt_canary_run(
   script_path: Optional[str] = None,
   recording_path: Optional[str] = None,
   actor: str = "system-steward-agent",
+  sequence: str = "001",
 ) -> Dict[str, Any]:
   root = root.resolve()
   package_path = require_file(
     root,
-    publish_package_path or f"05_exports/{date}/publish-package.json",
+    publish_package_path or str(
+      ContentRef(date, content_type, sequence).media_dir(root, "05_exports")
+      / "publish-package.json"
+    ),
     "publish package",
   )
   package = json.loads(package_path.read_text(encoding="utf-8"))
@@ -310,38 +329,41 @@ def adopt_canary_run(
   if not candidate:
     raise RunStateError("No candidate release is configured.")
 
-  adoption_mode = "native-canary-package"
-  if production.get("systemVersion") != candidate:
-    safe_content_id = re.sub(r"[^A-Za-z0-9._-]+", "-", content_id).strip("-") or "content"
-    run_id = validate_run_id(f"{safe_content_id}-canary-{candidate}")
-    package = json.loads(json.dumps(package, ensure_ascii=False))
-    package["runId"] = run_id
-    package["production"]["systemVersion"] = candidate
-    package["generatedAt"] = now_iso()
-    package["canary"] = {
-      "mode": "stable-artifact-adoption",
-      "mediaReencoded": False,
-      "sourceRunId": source_run_id,
-      "sourceSystemVersion": production.get("systemVersion"),
-      "sourcePackage": relative_or_absolute(root, source_package_path),
-    }
-    package_path = (
-      root
-      / "00_state"
-      / "releases"
-      / candidate
-      / "canary"
-      / date
-      / safe_content_id
-      / "publish-package.json"
-    )
-    candidate_errors = validate_value(package, schema)
-    if candidate_errors:
-      raise RunStateError("Invalid Canary package: " + "; ".join(candidate_errors))
-    atomic_write_json(package_path, package)
-    adoption_mode = "stable-artifact-adoption"
+  safe_content_id = re.sub(r"[^A-Za-z0-9._-]+", "-", content_id).strip("-") or "content"
+  source_version = str(production.get("systemVersion", ""))
+  if source_version == candidate:
+    adoption_mode = "active-candidate-revalidation"
+    canary_mode = "active-candidate-revalidation"
   else:
-    run_id = validate_run_id(source_run_id)
+    adoption_mode = "stable-artifact-adoption"
+    canary_mode = "stable-artifact-adoption"
+
+  run_id = validate_run_id(f"{safe_content_id}-canary-{candidate}")
+  package = json.loads(json.dumps(package, ensure_ascii=False))
+  package["runId"] = run_id
+  package["production"]["systemVersion"] = candidate
+  package["generatedAt"] = now_iso()
+  package["canary"] = {
+    "mode": canary_mode,
+    "mediaReencoded": False,
+    "sourceRunId": source_run_id,
+    "sourceSystemVersion": source_version,
+    "sourcePackage": relative_or_absolute(root, source_package_path),
+  }
+  package_path = (
+    root
+    / "00_state"
+    / "releases"
+    / candidate
+    / "canary"
+    / date
+    / safe_content_id
+    / "publish-package.json"
+  )
+  candidate_errors = validate_value(package, schema)
+  if candidate_errors:
+    raise RunStateError("Invalid Canary package: " + "; ".join(candidate_errors))
+  atomic_write_json(package_path, package)
 
   finalized = finalize_prepared_run(
     root,
@@ -353,6 +375,7 @@ def adopt_canary_run(
     script_path=script_path,
     recording_path=recording_path,
     actor=actor,
+    sequence=sequence,
   )
   run = finalized["run"]
   validation = validate_real_canary(root, run_id)

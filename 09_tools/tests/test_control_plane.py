@@ -1,4 +1,5 @@
 from pathlib import Path
+import csv
 import json
 import shutil
 import subprocess
@@ -180,6 +181,28 @@ class WorkspaceBootstrapTest(unittest.TestCase):
       self.assertTrue(result["loopReady"])
       self.assertEqual(result["personalizationStatus"], "pending")
 
+      workspace_path = root / "00_state" / "workspace.json"
+      workspace = json.loads(workspace_path.read_text(encoding="utf-8"))
+      workspace["integrations"]["githubIssues"] = {
+        "enabled": True,
+        "repository": "example/video-workshop",
+      }
+      workspace_path.write_text(json.dumps(workspace), encoding="utf-8")
+      with patch(
+        "video_production_core.workspace_bootstrap.github_auth_ready",
+        return_value=False,
+      ):
+        github_unavailable = doctor_workspace(root)
+
+      github_check = next(
+        check for check in github_unavailable["checks"]
+        if check["name"] == "github-issues"
+      )
+      self.assertEqual(github_check["status"], "fail")
+      self.assertFalse(github_check["required"])
+      self.assertFalse(github_unavailable["githubIssuesReady"])
+      self.assertTrue(github_unavailable["readyForContent"])
+
   def test_ai_context_lists_public_order_and_local_corpus(self):
     with tempfile.TemporaryDirectory() as directory:
       root = Path(directory)
@@ -192,12 +215,40 @@ class WorkspaceBootstrapTest(unittest.TestCase):
       shutil.copy2(PROJECT_ROOT / "WORKFLOW.md", root / "WORKFLOW.md")
       initialize_workspace(root)
       (root / "01_inbox" / "sample.md").write_text("sample\n", encoding="utf-8")
+      (root / "06_logs" / "README.md").write_text("public placeholder\n", encoding="utf-8")
 
       context = build_ai_context(root)
 
       self.assertEqual(context["publicReadOrder"][0], "AGENTS.md")
       self.assertEqual(context["personalization"]["status"], "pending")
       self.assertIn("01_inbox/sample.md", context["personalization"]["sourceFiles"])
+      self.assertNotIn("06_logs/README.md", context["personalization"]["sourceFiles"])
+
+  def test_doctor_blocks_render_when_disk_space_is_below_threshold(self):
+    with tempfile.TemporaryDirectory() as directory:
+      root = Path(directory)
+      shutil.copytree(PROJECT_ROOT / "00_system", root / "00_system")
+      shutil.copytree(PROJECT_ROOT / ".codex", root / ".codex")
+      shutil.copy2(PROJECT_ROOT / "package.json", root / "package.json")
+      shutil.copy2(PROJECT_ROOT / ".gitignore", root / ".gitignore")
+      shutil.copy2(PROJECT_ROOT / "AGENTS.md", root / "AGENTS.md")
+      shutil.copy2(PROJECT_ROOT / "START_HERE.md", root / "START_HERE.md")
+      shutil.copy2(PROJECT_ROOT / "PIPELINE.md", root / "PIPELINE.md")
+      shutil.copy2(PROJECT_ROOT / "WORKFLOW.md", root / "WORKFLOW.md")
+      initialize_workspace(root)
+
+      with patch(
+        "video_production_core.media_retention.shutil.disk_usage",
+        return_value=type("Usage", (), {"free": 1024})(),
+      ):
+        result = doctor_workspace(root)
+
+      disk_check = next(
+        check for check in result["checks"] if check["name"] == "disk-space"
+      )
+      self.assertEqual(disk_check["status"], "fail")
+      self.assertTrue(result["valid"])
+      self.assertFalse(result["readyForRender"])
 
 
 class CoverWorkflowTest(unittest.TestCase):
@@ -335,7 +386,7 @@ class CoverWorkflowTest(unittest.TestCase):
           self.make_image(prefix.parent / f"{prefix.name}_3x4.jpg", (1080, 1440))
           self.make_image(prefix.parent / f"{prefix.name}_4x3.jpg", (1440, 1080))
           manifest = (
-            command_root / "04_videos/2026-07-14/cover-qc"
+            command_root / "04_videos/2026-07-14/video-diary/001/cover-qc"
             / f"{prefix.name}_pair_manifest.json"
           )
           manifest.parent.mkdir(parents=True, exist_ok=True)
@@ -460,7 +511,11 @@ class ContractValidationTest(unittest.TestCase):
     result = validate_contract_examples(PROJECT_ROOT)
 
     self.assertTrue(result["valid"], result["errors"])
-    self.assertEqual(len(result["contracts"]), 3)
+    self.assertEqual(len(result["contracts"]), 5)
+    self.assertIn(
+      "evolution-observation",
+      {item["contract"] for item in result["contracts"]},
+    )
 
   def test_invalid_contract_is_detected(self):
     schema = load_contract_json(
@@ -822,11 +877,15 @@ class CanaryValidationTest(unittest.TestCase):
       },
     }), encoding="utf-8")
 
-    srt_path = root / "04_videos" / "2026-07-13" / "subtitles" / "corrected.srt"
-    video_path = root / "05_exports" / "2026-07-13" / "final.mp4"
-    cover_3x4 = root / "05_exports" / "2026-07-13" / "cover_3x4.png"
-    cover_4x3 = root / "05_exports" / "2026-07-13" / "cover_4x3.png"
-    publish_path = root / "05_exports" / "2026-07-13" / "publish-package.json"
+    workspace = root / "04_videos" / "2026-07-13" / "video-diary" / "001"
+    export_dir = root / "05_exports" / "2026-07-13" / "video-diary" / "001"
+    srt_path = workspace / "subtitles" / "corrected.srt"
+    video_path = export_dir / "final.mp4"
+    cover_3x4 = export_dir / "cover_3x4.png"
+    cover_4x3 = export_dir / "cover_4x3.png"
+    publish_path = export_dir / "publish-package.json"
+    srt_path.parent.mkdir(parents=True, exist_ok=True)
+    export_dir.mkdir(parents=True, exist_ok=True)
     srt_path.write_text("1\n00:00:00,000 --> 00:00:01,000\n测试\n", encoding="utf-8")
     video_path.write_bytes(b"canary-video")
     self.write_png_header(cover_3x4, 1080, 1440)
@@ -945,20 +1004,22 @@ class CanaryValidationTest(unittest.TestCase):
     with tempfile.TemporaryDirectory() as directory:
       root = Path(directory)
       run_id, _ = self.make_canary_workspace(root, write_run=False)
+      canary_run_id = f"{run_id}-canary-3.0.0"
       protected_paths = [
-        root / "04_videos" / "2026-07-13" / "subtitles" / "corrected.srt",
-        root / "05_exports" / "2026-07-13" / "final.mp4",
-        root / "05_exports" / "2026-07-13" / "cover_3x4.png",
-        root / "05_exports" / "2026-07-13" / "cover_4x3.png",
-        root / "05_exports" / "2026-07-13" / "publish-package.json",
+        root / "04_videos" / "2026-07-13" / "video-diary" / "001" / "subtitles" / "corrected.srt",
+        root / "05_exports" / "2026-07-13" / "video-diary" / "001" / "final.mp4",
+        root / "05_exports" / "2026-07-13" / "video-diary" / "001" / "cover_3x4.png",
+        root / "05_exports" / "2026-07-13" / "video-diary" / "001" / "cover_4x3.png",
+        root / "05_exports" / "2026-07-13" / "video-diary" / "001" / "publish-package.json",
       ]
       before = {path: path.read_bytes() for path in protected_paths}
 
       result = adopt_canary_run(root, date="2026-07-13", actor="test")
 
       self.assertFalse(result["reused"])
+      self.assertEqual(result["adoptionMode"], "active-candidate-revalidation")
       self.assertTrue(result["validation"]["valid"], result["validation"]["checks"])
-      run = get_run(root, run_id)
+      run = get_run(root, canary_run_id)
       self.assertEqual(run["channel"], "canary")
       self.assertEqual(run["currentStage"], "completed")
       self.assertTrue(run["publishReady"])
@@ -967,7 +1028,7 @@ class CanaryValidationTest(unittest.TestCase):
       revision = run["revision"]
       repeated = adopt_canary_run(root, date="2026-07-13", actor="test")
       self.assertTrue(repeated["reused"])
-      self.assertEqual(get_run(root, run_id)["revision"], revision)
+      self.assertEqual(get_run(root, canary_run_id)["revision"], revision)
 
   def test_adopt_rejects_not_ready_package_without_creating_run(self):
     with tempfile.TemporaryDirectory() as directory:
@@ -982,6 +1043,7 @@ class CanaryValidationTest(unittest.TestCase):
         adopt_canary_run(root, date="2026-07-13", actor="test")
 
       self.assertFalse((root / "00_state" / "runs" / run_id / "run.json").exists())
+      self.assertFalse((root / "00_state" / "runs" / f"{run_id}-canary-3.0.0" / "run.json").exists())
       system = json.loads((root / "00_system" / "system.json").read_text(encoding="utf-8"))
       package = json.loads((root / "package.json").read_text(encoding="utf-8"))
       self.assertEqual(system["activeRelease"], "2.1.0")
@@ -995,9 +1057,9 @@ class CanaryValidationTest(unittest.TestCase):
         write_run=False,
         package_system_version="2.1.0",
       )
-      source_package = root / "05_exports" / "2026-07-13" / "publish-package.json"
+      source_package = root / "05_exports" / "2026-07-13" / "video-diary" / "001" / "publish-package.json"
       source_bytes = source_package.read_bytes()
-      video = root / "05_exports" / "2026-07-13" / "final.mp4"
+      video = root / "05_exports" / "2026-07-13" / "video-diary" / "001" / "final.mp4"
       video_bytes = video.read_bytes()
 
       result = adopt_canary_run(root, date="2026-07-13", actor="test")
@@ -1064,7 +1126,7 @@ class CanaryValidationTest(unittest.TestCase):
       manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
       manifest["gates"]["realVideoCanary"] = "pass"
       manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-      video = root / "05_exports" / "2026-07-13" / "final.mp4"
+      video = root / "05_exports" / "2026-07-13" / "video-diary" / "001" / "final.mp4"
       video_bytes = video.read_bytes()
 
       activated = activate_release(root, confirm=True, actor="test")
@@ -1092,6 +1154,29 @@ class CanaryValidationTest(unittest.TestCase):
         "2.1.0",
       )
       self.assertTrue((root / "00_state" / "runs" / run_id / "run.json").exists())
+
+  def test_active_finalization_closes_content_ledger_idempotently(self):
+    with tempfile.TemporaryDirectory() as directory:
+      root = Path(directory)
+      run_id, manifest_path = self.make_canary_workspace(root, write_run=False)
+      manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+      manifest["gates"]["realVideoCanary"] = "pass"
+      manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+      activated = activate_release(root, confirm=True, actor="test")
+      self.assertTrue(activated["changed"])
+
+      first = finalize_active_run(root, date="2026-07-13", actor="test")
+      second = finalize_active_run(root, date="2026-07-13", actor="test")
+      with (root / "00_state" / "content-ledger.csv").open(encoding="utf-8") as file:
+        rows = list(csv.DictReader(file))
+      row = next(item for item in rows if item["content_id"] == run_id)
+
+      self.assertTrue(first["contentLedger"]["changed"])
+      self.assertFalse(second["contentLedger"]["changed"])
+      self.assertEqual(row["status"], "exported")
+      self.assertEqual(row["title"], "Canary")
+      self.assertTrue(row["export_ref"].endswith("final.mp4"))
 
 
 if __name__ == "__main__":

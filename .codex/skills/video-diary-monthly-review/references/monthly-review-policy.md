@@ -10,9 +10,9 @@ It is not part of the normal daily pipeline.
 
 The month archive keeps text and metadata:
 
-- `01_inbox/YYYY-MM-DD.md`
-- `02_scripts/YYYY-MM-DD.md`
-- `06_logs/YYYY-MM-DD.md`
+- `01_inbox/YYYY-MM-DD/<content-type>/<sequence>.md`
+- `02_scripts/YYYY-MM-DD/<content-type>/<sequence>.md`
+- `06_logs/YYYY-MM-DD/<content-type>/<sequence>.md`
 - monthly rows from `00_state/publish-ledger.csv`, with `06_logs/publish-ledger.csv` as fallback
 - monthly video file manifest
 - production stats derived from `00_state/production-stats.csv`, with daily logs and publish ledger as fallback
@@ -60,3 +60,7 @@ Not allowed:
 - deleting paths outside the project
 
 If the user asks to delete all monthly videos, generate the manifest and tell them the tool supports one explicit file at a time.
+
+This boundary applies to monthly-review commands. The daily
+`vp cleanup run --apply` retention route is a separate, explicitly enabled
+control with per-file validation and an append-only deletion ledger.

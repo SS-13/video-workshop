@@ -9,7 +9,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 EDIT_SCRIPT_DIR = SCRIPT_DIR.parent.parent / "video-diary-edit" / "scripts"
 sys.path.insert(0, str(EDIT_SCRIPT_DIR))
 
-from workflow_state import load_job, save_job, value_fingerprint
+from workflow_state import content_media_dir, load_job, save_job, value_fingerprint
 
 
 def resolve_path(root, value):
@@ -52,6 +52,8 @@ def run_cover(args, aspect, base_frame, output_path, qc_path):
 def main():
   parser = argparse.ArgumentParser(description="Render matching 3:4 and 4:3 covers with one locked style version.")
   parser.add_argument("--date", required=True)
+  parser.add_argument("--content-type", "--column", dest="content_type", default="video-diary")
+  parser.add_argument("--sequence", default="001")
   parser.add_argument("--route", default="video-diary")
   parser.add_argument("--style-version", default="v1.3.1")
   parser.add_argument("--day-label", default="")
@@ -70,7 +72,7 @@ def main():
   prefix = resolve_path(root, args.output_prefix)
   output_3x4 = prefix.parent / f"{prefix.name}_3x4.jpg"
   output_4x3 = prefix.parent / f"{prefix.name}_4x3.jpg"
-  qc_dir = root / "04_videos" / args.date / "cover-qc"
+  qc_dir = content_media_dir(root, "04_videos", args.date, args.content_type, args.sequence) / "cover-qc"
   qc_3x4 = qc_dir / f"{prefix.name}_3x4_qc.json"
   qc_4x3 = qc_dir / f"{prefix.name}_4x3_qc.json"
 
@@ -85,6 +87,8 @@ def main():
   }
   manifest = {
     "date": args.date,
+    "contentType": args.content_type,
+    "sequence": args.sequence,
     "route": args.route,
     "styleVersion": args.style_version,
     "contentHash": value_fingerprint(content),
@@ -102,7 +106,7 @@ def main():
   manifest_path.parent.mkdir(parents=True, exist_ok=True)
   manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-  job = load_job(root, args.date)
+  job = load_job(root, args.date, args.content_type, args.sequence)
   job.setdefault("content", {}).update({key: value for key, value in content.items() if value})
   job.setdefault("style", {}).update({"coverRoute": args.route, "coverVersion": args.style_version})
   job.setdefault("artifacts", {}).update({
@@ -111,11 +115,20 @@ def main():
     "coverPairManifest": str(manifest_path),
   })
   job.setdefault("quality", {})["cover"] = {"status": "pass", "manifest": str(manifest_path)}
-  save_job(root, args.date, job)
+  save_job(root, args.date, job, args.content_type, args.sequence)
 
   if job.get("artifacts", {}).get("correctedSrt"):
     subprocess.run(
-      [sys.executable, EDIT_SCRIPT_DIR / "build-review-pack.py", "--date", args.date],
+      [
+        sys.executable,
+        EDIT_SCRIPT_DIR / "build-review-pack.py",
+        "--date",
+        args.date,
+        "--content-type",
+        args.content_type,
+        "--sequence",
+        args.sequence,
+      ],
       check=True,
     )
 

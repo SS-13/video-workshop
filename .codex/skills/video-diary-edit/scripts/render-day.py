@@ -5,6 +5,16 @@ import sys
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parents[3]
+TOOLS_DIR = PROJECT_ROOT / "09_tools"
+sys.path.insert(0, str(TOOLS_DIR))
+
+from video_production_core.media_retention import (  # noqa: E402
+  MediaRetentionError,
+  disk_space_status,
+)
+
+
 VALID_ENGINES = {"v2", "legacy"}
 
 
@@ -66,6 +76,19 @@ def translate_v2_arguments(arguments):
 
 
 def main():
+  try:
+    disk = disk_space_status(PROJECT_ROOT)
+  except MediaRetentionError as error:
+    raise SystemExit(f"render_preflight=failed\nreason={error}") from error
+  if not disk["ready"]:
+    print("render_preflight=failed")
+    print("reason=insufficient-disk-space")
+    print(f"free_bytes={disk['freeBytes']}")
+    print(f"minimum_free_bytes={disk['minimumFreeBytes']}")
+    raise SystemExit(2)
+  print("render_preflight=pass")
+  print(f"free_bytes={disk['freeBytes']}")
+
   engine, arguments = extract_engine(sys.argv[1:])
   if engine == "v2" and needs_legacy(arguments):
     print("engine_fallback=legacy")

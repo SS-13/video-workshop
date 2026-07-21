@@ -11,6 +11,10 @@ Use this skill outside the daily workflow, usually on the last day of the month 
 
 Do not bulk delete. The bundled script may scan all videos and create a deletion manifest, but actual deletion is limited to one explicit video file at a time.
 
+The separately owned daily retention runner in `video-diary-cleanup` is not a
+monthly-review command. It may process multiple exact paths only after explicit
+local opt-in and its publish/statistics/lock gates pass.
+
 ## Required Read
 
 Read before running destructive-adjacent work:

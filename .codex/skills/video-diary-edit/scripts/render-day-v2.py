@@ -7,7 +7,14 @@ import subprocess
 import sys
 import time
 
-from workflow_state import file_fingerprint, load_job, record_stage, save_job, stage_cache_key
+from workflow_state import (
+  content_media_dir,
+  file_fingerprint,
+  load_job,
+  record_stage,
+  save_job,
+  stage_cache_key,
+)
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -63,15 +70,15 @@ def probe_duration(path):
   return float(json.loads(output)["format"]["duration"])
 
 
-def read_manifest(root, date):
-  path = root / "04_videos" / date / "preprocessed" / "preprocess_manifest.json"
+def read_manifest(root, date, content_type="video-diary", sequence="001"):
+  path = content_media_dir(root, "04_videos", date, content_type, sequence) / "preprocessed" / "preprocess_manifest.json"
   if not path.exists():
     raise SystemExit(f"Missing preprocess manifest: {path}")
   return json.loads(path.read_text(encoding="utf-8"))
 
 
-def choose_usable_input(root, date, requested_input):
-  manifest = read_manifest(root, date)
+def choose_usable_input(root, date, requested_input, content_type="video-diary", sequence="001"):
+  manifest = read_manifest(root, date, content_type, sequence)
   items = manifest.get("items", [])
   if not items:
     raise SystemExit("Preprocess manifest has no items.")
@@ -105,7 +112,8 @@ def write_report(path, data):
 def main():
   parser = argparse.ArgumentParser(description="Optimized video diary pipeline with word timestamps and one review gate.")
   parser.add_argument("--date", required=True)
-  parser.add_argument("--column", default="video-diary")
+  parser.add_argument("--content-type", "--column", dest="content_type", default="video-diary")
+  parser.add_argument("--sequence", default="001")
   parser.add_argument("--input")
   parser.add_argument("--video-input")
   parser.add_argument("--srt-input")
@@ -132,13 +140,14 @@ def main():
   args = parser.parse_args()
 
   root = Path.cwd()
-  if args.column != "video-diary":
-    raise SystemExit("v2 currently supports the default video-diary path. Use --engine legacy for other columns until migrated.")
-
   stages = []
-  job = load_job(root, args.date, args.column)
+  content_cli = ["--content-type", args.content_type, "--sequence", args.sequence]
+  workspace = content_media_dir(root, "04_videos", args.date, args.content_type, args.sequence)
+  job = load_job(root, args.date, args.content_type, args.sequence)
   job["engine"] = "v2"
-  job["column"] = args.column
+  job["contentType"] = args.content_type
+  job["column"] = args.content_type
+  job["sequence"] = args.sequence
   job.setdefault("content", {}).update({
     key: value for key, value in {
       "title": args.title,
@@ -161,10 +170,10 @@ def main():
     job.setdefault("requests", {})["insertPlan"] = plan_data.get("items", plan_data)
     job["artifacts"]["overlayPlan"] = str(plan_path)
   job.setdefault("requests", {})["coverCardSeconds"] = args.cover_duration
-  save_job(root, args.date, job)
+  save_job(root, args.date, job, args.content_type, args.sequence)
 
-  subtitle_dir = root / "04_videos" / args.date / "subtitles"
-  run_dir = root / "04_videos" / args.date / "edit-run"
+  subtitle_dir = workspace / "subtitles"
+  run_dir = workspace / "edit-run"
   subtitle_dir.mkdir(parents=True, exist_ok=True)
   run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -178,6 +187,7 @@ def main():
       SCRIPT_DIR / "preprocess-recording.py",
       "--date",
       args.date,
+      *content_cli,
       "--all",
       "--tail-window",
       "10",
@@ -185,7 +195,9 @@ def main():
     if args.force:
       preprocess_command.append("--force")
     elapsed = run_step("preprocess_tail", preprocess_command, stages)
-    source_video = choose_usable_input(root, args.date, args.input)
+    source_video = choose_usable_input(
+      root, args.date, args.input, args.content_type, args.sequence
+    )
     job["source"] = {
       "recording": str(source_video),
       "fingerprint": file_fingerprint(source_video),
@@ -199,7 +211,7 @@ def main():
       [source_video],
       elapsed,
     )
-    save_job(root, args.date, job)
+    save_job(root, args.date, job, args.content_type, args.sequence)
 
     prompt_path = subtitle_dir / f"{args.date}_transcription_prompt.txt"
     elapsed = run_step(
@@ -209,6 +221,7 @@ def main():
         SCRIPT_DIR / "build-transcription-prompt.py",
         "--date",
         args.date,
+        *content_cli,
         "--output",
         prompt_path,
       ],
@@ -224,6 +237,7 @@ def main():
       SCRIPT_DIR / "transcribe-recording-to-srt.py",
       "--date",
       args.date,
+      *content_cli,
       "--input",
       source_video,
       "--output",
@@ -277,6 +291,7 @@ def main():
         sys.executable,
         SCRIPT_DIR / "correct-transcript.py",
         args.date,
+        *content_cli,
         "--input",
         word_srt,
         "--output",
@@ -358,10 +373,10 @@ def main():
       "subtitleTiming": {"status": "pass", "report": str(timing_report)},
     })
     job["status"] = "review_ready"
-    save_job(root, args.date, job)
+    save_job(root, args.date, job, args.content_type, args.sequence)
     run_step(
       "build_review_pack",
-      [sys.executable, SCRIPT_DIR / "build-review-pack.py", "--date", args.date],
+      [sys.executable, SCRIPT_DIR / "build-review-pack.py", "--date", args.date, *content_cli],
       stages,
     )
 
@@ -374,14 +389,14 @@ def main():
         "videoInput": str(source_video),
         "correctedSrt": str(corrected_srt),
         "wordJson": str(word_json),
-        "reviewPack": str(root / "04_videos" / args.date / "REVIEW.md"),
+        "reviewPack": str(workspace / "REVIEW.md"),
         "totalElapsedSeconds": round(sum(stage["elapsedSeconds"] for stage in stages), 3),
         "stages": stages,
       })
       print(f"video_input={source_video}")
       print(f"final_srt={corrected_srt}")
       print(f"word_json={word_json}")
-      print(f"review_pack={root / '04_videos' / args.date / 'REVIEW.md'}")
+      print(f"review_pack={workspace / 'REVIEW.md'}")
       print("stopped_after=review")
       return
   else:
@@ -438,7 +453,7 @@ def main():
     "subtitleTiming": {"status": "pass", "report": str(timing_report)},
   })
   job["status"] = "render_ready"
-  save_job(root, args.date, job)
+  save_job(root, args.date, job, args.content_type, args.sequence)
 
   duration = probe_duration(source_video)
   ass_path = subtitle_dir / f"{args.date}_transcribed.ass"
@@ -449,6 +464,7 @@ def main():
       SCRIPT_DIR / "generate-video-diary-caption-assets.py",
       "--date",
       args.date,
+      *content_cli,
       "--duration",
       f"{duration:.3f}",
       "--srt-input",
@@ -459,13 +475,14 @@ def main():
   )
 
   output_path = resolve_path(root, args.output) if args.output else (
-    root / "04_videos" / args.date / f"{args.date}_v2_ass_subtitled.mp4"
+    workspace / f"{args.date}_{args.content_type}_{args.sequence}_v2_ass_subtitled.mp4"
   )
   render_command = [
     sys.executable,
     SCRIPT_DIR / "render-ass-subtitles.py",
     "--date",
     args.date,
+    *content_cli,
     "--input",
     source_video,
     "--output",
@@ -497,11 +514,13 @@ def main():
   )
   job["status"] = "rendered"
   job["artifacts"]["finalDraft"] = str(output_path)
-  save_job(root, args.date, job)
+  save_job(root, args.date, job, args.content_type, args.sequence)
 
   report_path = run_dir / f"{args.date}_v2_render_report.json"
   write_report(report_path, {
     "date": args.date,
+    "contentType": args.content_type,
+    "sequence": args.sequence,
     "engine": "v2",
     "input": str(source_video),
     "correctedSrt": str(corrected_srt),

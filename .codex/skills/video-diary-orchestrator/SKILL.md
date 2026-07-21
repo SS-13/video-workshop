@@ -59,7 +59,7 @@ After a recording is uploaded, the default production order is two parallel lane
 1. Inspect the recording once.
 2. Lane A: use `video-diary-cover` to render the locked 3:4/4:3 cover pair and run cover QC.
 3. Lane B: use v2 `video-diary-edit` to tail-scan, cache audio, produce word timestamps, dictionary-correct the SRT, and run text/audio alignment gates.
-4. Build `04_videos/YYYY-MM-DD/REVIEW.md` containing both covers, external SRT, review video, low-confidence segments, and insert plan. Ask for one combined confirmation.
+4. Build `04_videos/YYYY-MM-DD/<content-type>/<sequence>/REVIEW.md` containing both covers, external SRT, review video, low-confidence segments, and insert plan. Ask for one combined confirmation.
 5. Run Compliance Agent on the confirmed SRT and insert plan before video rendering. If it returns `revise` or `block`, modify the SRT/plan only.
 6. After confirmation and compliance pass, render subtitles, cover card, and confirmed image inserts in one FFmpeg pass.
 7. Generate the Douyin publish title, description, and 3-5 smart chapters from the confirmed corrected SRT. Include this copy in the pre-publish compliance review.
@@ -68,13 +68,12 @@ After a recording is uploaded, the default production order is two parallel lane
 
 Minimal inspection, terminal-tail preprocessing, transcription, SRT correction, and SRT checks may happen before cover confirmation. Do not burn subtitles, apply unconfirmed inserts, or render the final MP4 before both the cover and the external SRT are confirmed.
 
-## Column Path Rule
+## Content Path Rule
 
-- Default column is `video-diary`. Other columns are opt-in only.
-- `视频日记` keeps date-first folders: `03_recordings/YYYY-MM-DD/`, `04_videos/YYYY-MM-DD/`, `05_exports/YYYY-MM-DD/`.
-- `碎碎念` uses column-first folders: `03_recordings/suisuinian/YYYY-MM-DD_001/`, `04_videos/suisuinian/YYYY-MM-DD_001/`, `05_exports/suisuinian/YYYY-MM-DD_001/`.
-- `读书笔记` uses column-first folders: `03_recordings/reading-note/YYYY-MM-DD_001/`, `04_videos/reading-note/YYYY-MM-DD_001/`, `05_exports/reading-note/YYYY-MM-DD_001/`.
-- Use `_001`, `_002` for multiple uploads in the same column on the same date.
+- Every stage uses `YYYY-MM-DD/<content-type>/<sequence>`.
+- Default content key is `YYYY-MM-DD/video-diary/001`.
+- Explicit alternatives are `suisuinian` and `reading-note`.
+- Use `001`, `002`, and so on for multiple items of the same type on one date.
 - Only `视频日记` increments Day numbers.
 
 ## Invariants
@@ -86,8 +85,8 @@ Minimal inspection, terminal-tail preprocessing, transcription, SRT correction, 
 - Default edit has no BGM.
 - Default `video-diary` v2 does not cut spoken video unless filler removal is explicitly requested. `polished` and `碎碎念` currently use the preserved legacy route. This removes the previous standard/polished rule conflict.
 - Subtitle quality has priority over speed when the user says so.
-- Final upload files live in `05_exports/YYYY-MM-DD/` for `视频日记`, or `05_exports/<column>/YYYY-MM-DD_###/` for other columns.
-- Cover revisions live in `15_cover_gallery/YYYY-MM-DD/`.
+- Final upload files live in `05_exports/YYYY-MM-DD/<content-type>/<sequence>/`.
+- Cover revisions live in `15_cover_gallery/YYYY-MM-DD/<content-type>/<sequence>/`.
 - Cover pair and corrected external SRT are produced in parallel and delivered as one review pack; final burn-in/export begins after that pack and pre-render compliance are confirmed.
 - `edit:render-day-v2` is the default route. `edit:render-day-legacy` remains available as an immediate fallback and must not be deleted during the v2 rollout.
 - Compliance input review happens before Text Agent writes the publish script.

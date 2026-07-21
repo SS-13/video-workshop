@@ -10,14 +10,23 @@ import importlib.util
 import json
 import os
 import shutil
+import subprocess
 
 from video_production_core.contracts import validate_contract_examples
+from video_production_core.media_retention import (
+  DEFAULT_MINIMUM_FREE_BYTES,
+  DEFAULT_RETENTION_DAYS,
+  MediaRetentionError,
+  disk_space_status,
+  get_retention_config,
+)
 from video_production_core.registry import validate_control_plane
 
 
 WORKSPACE_DIRECTORIES = [
   "00_state/observations",
   "00_state/evolution",
+  "00_state/evolution/completed",
   "00_state/locks",
   "00_state/runs",
   "00_state/releases",
@@ -27,6 +36,7 @@ WORKSPACE_DIRECTORIES = [
   "04_videos",
   "05_exports",
   "06_logs",
+  "06_logs/media-retention",
   "10_skills/personal-speaking-style",
   "11_templates/audio/bgm",
   "11_templates/pencil-cover-demos",
@@ -67,6 +77,10 @@ PERSONALIZATION_SOURCE_PATTERNS = [
   "02_scripts/**/*.md",
   "06_logs/**/*.md",
 ]
+
+PERSONALIZATION_SOURCE_EXCLUDES = {
+  "06_logs/README.md",
+}
 
 CONTENT_LEDGER_FIELDS = [
   "content_id",
@@ -204,6 +218,17 @@ def initialize_workspace(root: Path) -> Dict[str, Any]:
       "name": root.name,
       "systemVersion": package.get("version", "unknown"),
       "defaultContentType": system.get("defaultContentType", "video-diary"),
+      "integrations": {
+        "githubIssues": {
+          "enabled": False,
+          "repository": "",
+        },
+      },
+      "mediaRetention": {
+        "enabled": False,
+        "retentionDays": DEFAULT_RETENTION_DAYS,
+        "minimumFreeBytes": DEFAULT_MINIMUM_FREE_BYTES,
+      },
       "createdAt": now_iso(),
     }, ensure_ascii=False, indent=2) + "\n",
     root / "00_state" / "day-counter.json": json.dumps({
@@ -300,7 +325,7 @@ def build_ai_context(root: Path) -> Dict[str, Any]:
     source_files.extend(
       relative_path(root, path)
       for path in root.glob(pattern)
-      if path.is_file()
+      if path.is_file() and relative_path(root, path) not in PERSONALIZATION_SOURCE_EXCLUDES
     )
   source_files = sorted(set(source_files))
 
@@ -341,6 +366,22 @@ def find_binary(name: str, candidates: List[Path] | None = None) -> str:
     if path.is_file():
       return str(path)
   return shutil.which(name) or ""
+
+
+def github_auth_ready(github_cli: str) -> bool:
+  if not github_cli:
+    return False
+  try:
+    result = subprocess.run(
+      [github_cli, "auth", "status", "-h", "github.com"],
+      check=False,
+      capture_output=True,
+      text=True,
+      timeout=10,
+    )
+  except (OSError, subprocess.TimeoutExpired):
+    return False
+  return result.returncode == 0
 
 
 def doctor_workspace(root: Path) -> Dict[str, Any]:
@@ -423,6 +464,57 @@ def doctor_workspace(root: Path) -> Dict[str, Any]:
   )
   add("daily-evolution-loop", loop_ready, True, {"topK": policy.get("topK")})
 
+  workspace_path = root / "00_state" / "workspace.json"
+  workspace = (
+    json.loads(workspace_path.read_text(encoding="utf-8"))
+    if workspace_path.is_file()
+    else {}
+  )
+  github_config = workspace.get("integrations", {}).get("githubIssues", {})
+  github_enabled = bool(github_config.get("enabled", False))
+  github_cli = find_binary("gh")
+  github_repository = str(github_config.get("repository", "")).strip()
+  github_authenticated = github_auth_ready(github_cli) if github_enabled else True
+  github_ready = bool(github_cli and github_repository and github_authenticated) if github_enabled else True
+  add(
+    "github-issues",
+    github_ready,
+    False,
+    {
+      "enabled": github_enabled,
+      "repository": github_repository,
+      "cli": github_cli or "not found",
+      "authenticated": github_authenticated,
+    },
+  )
+
+  try:
+    retention_config = get_retention_config(root)
+    retention_ready = True
+    retention_detail: Any = retention_config
+  except MediaRetentionError as error:
+    retention_config = {
+      "enabled": False,
+      "retentionDays": DEFAULT_RETENTION_DAYS,
+      "minimumFreeBytes": DEFAULT_MINIMUM_FREE_BYTES,
+    }
+    retention_ready = False
+    retention_detail = str(error)
+  add("media-retention", retention_ready, True, retention_detail)
+
+  disk_status = disk_space_status(root) if retention_ready else {
+    "ready": False,
+    "freeBytes": shutil.disk_usage(root).free,
+    "minimumFreeBytes": retention_config["minimumFreeBytes"],
+    "retentionEnabled": False,
+  }
+  add(
+    "disk-space",
+    disk_status["ready"],
+    False,
+    {key: value for key, value in disk_status.items() if key != "ready"},
+  )
+
   ignore_path = root / ".gitignore"
   ignore_text = ignore_path.read_text(encoding="utf-8") if ignore_path.exists() else ""
   missing_patterns = [value for value in PRIVATE_IGNORE_PATTERNS if value not in ignore_text]
@@ -433,6 +525,7 @@ def doctor_workspace(root: Path) -> Dict[str, Any]:
   node = find_binary("node")
   whisper = find_binary("whisper-cli", [Path("/usr/local/bin/whisper-cli")]) or find_binary("whisper")
   pillow = importlib.util.find_spec("PIL") is not None
+  fonttools = importlib.util.find_spec("fontTools") is not None
   custom_font = os.environ.get("VIDEO_WORKSHOP_FONT", "").strip()
   cover_font_candidates = [
     Path(custom_font) if custom_font else None,
@@ -452,6 +545,7 @@ def doctor_workspace(root: Path) -> Dict[str, Any]:
   add("ffmpeg", bool(ffmpeg), False, ffmpeg or "not found")
   add("ffprobe", bool(ffprobe), False, ffprobe or "not found")
   add("pillow", pillow, False, "installed" if pillow else "not found")
+  add("fonttools", fonttools, False, "installed" if fonttools else "not found")
   add("cover-font", bool(cover_font), False, cover_font or "set VIDEO_WORKSHOP_FONT")
   add("transcription-engine", bool(whisper), False, whisper or "not found")
 
@@ -459,7 +553,15 @@ def doctor_workspace(root: Path) -> Dict[str, Any]:
     check["name"] for check in checks
     if check["required"] and check["status"] != "pass"
   ]
-  render_requirements = {"ffmpeg", "ffprobe", "pillow", "cover-font", "transcription-engine"}
+  render_requirements = {
+    "ffmpeg",
+    "ffprobe",
+    "pillow",
+    "fonttools",
+    "cover-font",
+    "transcription-engine",
+    "disk-space",
+  }
   render_failures = [
     check["name"] for check in checks
     if check["name"] in render_requirements and check["status"] != "pass"
@@ -471,6 +573,7 @@ def doctor_workspace(root: Path) -> Dict[str, Any]:
     "readyForContent": valid,
     "readyForRender": valid and not render_failures,
     "loopReady": loop_ready,
+    "githubIssuesReady": github_ready,
     "personalizationStatus": personalization_status,
     "defaultContentType": system.get("defaultContentType"),
     "activeRelease": active_release,

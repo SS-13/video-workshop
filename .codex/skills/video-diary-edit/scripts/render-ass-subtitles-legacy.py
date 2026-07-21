@@ -5,6 +5,8 @@ import shutil
 import subprocess
 import tempfile
 
+from workflow_state import content_media_dir
+
 
 FFMPEG_FULL = Path("/usr/local/opt/ffmpeg-full/bin/ffmpeg")
 
@@ -24,6 +26,8 @@ def prepare_filter_ass(ass_path, date):
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("--date", required=True)
+  parser.add_argument("--content-type", "--column", dest="content_type", default="video-diary")
+  parser.add_argument("--sequence", default="001")
   parser.add_argument("--input", required=True)
   parser.add_argument("--output", required=True)
   parser.add_argument("--ass-input")
@@ -33,7 +37,10 @@ def main():
   args = parser.parse_args()
 
   root = Path.cwd()
-  ass_path = Path(args.ass_input) if args.ass_input else root / "04_videos" / args.date / "subtitles" / f"{args.date}_scripted.ass"
+  ass_path = Path(args.ass_input) if args.ass_input else (
+    content_media_dir(root, "04_videos", args.date, args.content_type, args.sequence)
+    / "subtitles" / f"{args.date}_scripted.ass"
+  )
   if not ass_path.is_absolute():
     ass_path = root / ass_path
   if not ass_path.exists():

@@ -4,6 +4,8 @@ import argparse
 import re
 import textwrap
 
+from workflow_state import content_media_dir, content_text_path
+
 
 VIDEO_WIDTH = 1080
 VIDEO_HEIGHT = 1920
@@ -397,14 +399,16 @@ def write_filter_script(path, segments):
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("--date", required=True)
+  parser.add_argument("--content-type", "--column", dest="content_type", default="video-diary")
+  parser.add_argument("--sequence", default="001")
   parser.add_argument("--duration", type=float, default=DEFAULT_DURATION)
   parser.add_argument("--srt-input")
   parser.add_argument("--ass-only", action="store_true")
   root = Path.cwd()
   args = parser.parse_args()
 
-  script_path = root / "02_scripts" / f"{args.date}.md"
-  output_dir = root / "04_videos" / args.date
+  script_path = content_text_path(root, "02_scripts", args.date, args.content_type, args.sequence)
+  output_dir = content_media_dir(root, "04_videos", args.date, args.content_type, args.sequence)
   subtitle_dir = output_dir / "subtitles"
   caption_image_dir = subtitle_dir / "caption_png"
 

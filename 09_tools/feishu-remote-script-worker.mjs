@@ -13,6 +13,9 @@ const LOG_DIR = path.join(ROOT, "06_logs");
 const WORKER_LOG_PATH = path.join(LOG_DIR, "feishu-worker.log");
 const WORKER_STATUS_PATH = path.join(LOG_DIR, "feishu-worker-status.json");
 const STARTED_AT = new Date().toISOString();
+const contentTextPath = (stage, date, contentType = "video-diary", sequence = "001") => (
+  path.join(ROOT, stage, date, contentType, `${sequence}.md`)
+);
 
 const maskIdentifier = (value) => {
   const text = String(value ?? "");
@@ -379,10 +382,10 @@ const appendRawIdea = async (record, options) => {
   const title = String(fields[FIELD.title] ?? "未命名话题");
   const raw = String(fields[FIELD.raw] ?? "");
   const topic = formatTopicNumber(fields[FIELD.topicNumber], 1);
-  const inboxPath = path.join(ROOT, "01_inbox", `${date}.md`);
+  const inboxPath = contentTextPath("01_inbox", date);
   const marker = `<!-- feishu-record:${record.recordId}:raw -->`;
   const markerEnd = `<!-- feishu-record:${record.recordId}:raw-end -->`;
-  const localPath = `01_inbox/${date}.md`;
+  const localPath = `01_inbox/${date}/video-diary/001.md`;
 
   if (!raw.trim()) {
     throw new Error("原始文案为空，无法录入。");
@@ -394,10 +397,16 @@ const appendRawIdea = async (record, options) => {
   if (existing.includes(marker)) {
     return { date, title, raw, topic, localPath, changed: false };
   }
+  const attributedExisting = existing.replace(
+    /^-\s*灵感来源：待确认\s*$/m,
+    "- 灵感来源：生活输入"
+  );
 
   const block = [
     buildTopicHeading(topic.number),
     `- 时间：${new Date().toLocaleString("zh-CN", { hour12: false })}`,
+    "- 灵感来源：生活输入",
+    "- Sparkling ID：-",
     "- 原始口述：",
     "",
     marker,
@@ -420,10 +429,10 @@ const appendRawIdea = async (record, options) => {
 
   const topicHeadingRe = new RegExp(`^##\\s+话题\\s+${topic.number}\\b.*$`, "m");
   const nextTopicRe = /^##\s+话题\s+\d+\b.*$/m;
-  const range = findSectionRange(existing, topicHeadingRe, nextTopicRe);
+  const range = findSectionRange(attributedExisting, topicHeadingRe, nextTopicRe);
   const nextContent = range
-    ? replaceSection(existing, range, block)
-    : `${existing.trimEnd()}\n\n${block}\n`;
+    ? replaceSection(attributedExisting, range, block)
+    : `${attributedExisting.trimEnd()}\n\n${block}\n`;
 
   await writeFile(inboxPath, nextContent);
   return { date, title, raw, topic, localPath, changed: true };
@@ -601,8 +610,8 @@ dry-run：这里会回填正式口播脚本。
 };
 
 const upsertScriptBlock = async (record, context, script, options) => {
-  const scriptPath = path.join(ROOT, "02_scripts", `${context.date}.md`);
-  const localPath = `02_scripts/${context.date}.md`;
+  const scriptPath = contentTextPath("02_scripts", context.date);
+  const localPath = `02_scripts/${context.date}/video-diary/001.md`;
   const marker = `<!-- feishu-script:${record.recordId}:start -->`;
   const markerEnd = `<!-- feishu-script:${record.recordId}:end -->`;
   const block = `${marker}

@@ -2,6 +2,8 @@ from pathlib import Path
 import argparse
 import csv
 
+from workflow_state import content_media_dir
+
 
 PROJECT_DICTIONARY = Path("11_templates/关键词收集/字幕纠错词库.tsv")
 PUBLIC_DICTIONARY = Path("00_system/defaults/transcript-corrections.tsv")
@@ -48,8 +50,8 @@ def resolve_path(root, value):
   return path if path.is_absolute() else root / path
 
 
-def find_default_input(root, date):
-  subtitle_dir = root / "04_videos" / date / "subtitles"
+def find_default_input(root, date, content_type="video-diary", sequence="001"):
+  subtitle_dir = content_media_dir(root, "04_videos", date, content_type, sequence) / "subtitles"
   candidates = [
     subtitle_dir / f"{date}_transcribed_raw.srt",
     subtitle_dir / f"{date}_transcribed.srt",
@@ -115,6 +117,8 @@ def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("date", nargs="?")
   parser.add_argument("--date", dest="date_flag")
+  parser.add_argument("--content-type", "--column", dest="content_type", default="video-diary")
+  parser.add_argument("--sequence", default="001")
   parser.add_argument("--input")
   parser.add_argument("--output")
   parser.add_argument("--dictionary", action="append")
@@ -137,19 +141,22 @@ def main():
     ]
   )
 
-  input_path = resolve_path(root, args.input) if args.input else find_default_input(root, date)
+  input_path = resolve_path(root, args.input) if args.input else find_default_input(
+    root, date, args.content_type, args.sequence
+  )
+  subtitle_dir = content_media_dir(root, "04_videos", date, args.content_type, args.sequence) / "subtitles"
   if not input_path.exists():
     raise SystemExit(f"Missing transcript SRT: {input_path}")
 
   output_path = (
     resolve_path(root, args.output)
     if args.output
-    else root / "04_videos" / date / "subtitles" / f"{date}_transcribed_corrected.srt"
+    else subtitle_dir / f"{date}_transcribed_corrected.srt"
   )
   report_path = (
     resolve_path(root, args.report)
     if args.report
-    else root / "04_videos" / date / "subtitles" / f"{date}_transcript_corrections.md"
+    else subtitle_dir / f"{date}_transcript_corrections.md"
   )
 
   replacements, used_dictionary_paths = read_dictionary_chain(dictionary_paths)
@@ -160,7 +167,7 @@ def main():
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(corrected, encoding="utf-8")
     if args.promote:
-      promoted_path = root / "04_videos" / date / "subtitles" / f"{date}_transcribed.srt"
+      promoted_path = subtitle_dir / f"{date}_transcribed.srt"
       if promoted_path != output_path:
         promoted_path.write_text(corrected, encoding="utf-8")
 
@@ -185,7 +192,7 @@ def main():
   print(f"replacement_items={len(changed)}")
   print(f"replacement_total={sum(item['count'] for item in changed)}")
   if args.promote and not args.dry_run:
-    print(f"promoted={root / '04_videos' / date / 'subtitles' / f'{date}_transcribed.srt'}")
+    print(f"promoted={subtitle_dir / f'{date}_transcribed.srt'}")
 
 
 if __name__ == "__main__":

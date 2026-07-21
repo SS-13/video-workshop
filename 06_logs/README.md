@@ -26,3 +26,10 @@
 - `estimated_tokens`：本次制作估算 token。
 
 月度复盘优先读取 `production-stats.csv` 汇总视频长度和制作总用时，再回退到 `publish-ledger.csv` 和每日日志。
+
+## 媒体保留审计
+
+`media-retention/` 保存每次自动保留任务的 JSON 清单。清单记录候选、实际删除、
+跳过原因、释放空间和生产锁状态；长期统计以
+`00_state/media-retention-ledger.csv` 为准。清理不会删除本 README、脚本、字幕、
+封面、发布文案或结构化统计。

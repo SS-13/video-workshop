@@ -117,13 +117,82 @@ def desired_ledger_row(
     "day_label": stats.get("day_label", ""),
     "title": desired_title,
     "status": "exported" if promote_existing else current_status,
-    "inbox_ref": current.get("inbox_ref") or default_reference(root, f"01_inbox/{date}.md"),
-    "script_ref": current.get("script_ref") or default_reference(root, f"02_scripts/{date}.md"),
-    "recording_ref": current.get("recording_ref") or f"03_recordings/{date}/",
-    "workspace_ref": current.get("workspace_ref") or f"04_videos/{date}/",
+    "inbox_ref": current.get("inbox_ref") or default_reference(
+      root, f"01_inbox/{date}/video-diary/001.md"
+    ),
+    "script_ref": current.get("script_ref") or default_reference(
+      root, f"02_scripts/{date}/video-diary/001.md"
+    ),
+    "recording_ref": current.get("recording_ref") or f"03_recordings/{date}/video-diary/001/",
+    "workspace_ref": current.get("workspace_ref") or f"04_videos/{date}/video-diary/001/",
     "export_ref": current.get("export_ref") or stats.get("video_path", ""),
     "cover_ref": current.get("cover_ref") or stats.get("cover_path", ""),
     "notes": note,
+  }
+
+
+def package_content_date(package: Dict[str, Any]) -> str:
+  for value in [
+    package.get("contentId", ""),
+    package.get("runId", ""),
+    *package.get("artifacts", {}).values(),
+  ]:
+    match = re.search(r"\d{4}-\d{2}-\d{2}", str(value))
+    if match:
+      return match.group(0)
+  return ""
+
+
+def finalize_content_ledger(root: Path, package: Dict[str, Any]) -> Dict[str, Any]:
+  """Idempotently close one content item after a publish-ready run."""
+  content_id = str(package.get("contentId", "")).strip()
+  content_type = str(package.get("contentType", "video-diary")).strip() or "video-diary"
+  sequence = str(package.get("sequence", "001")).zfill(3)
+  date = package_content_date(package)
+  if not content_id or not date:
+    return {"changed": False, "contentId": content_id, "error": "missing_content_identity"}
+
+  ledger_path = root / "00_state" / "content-ledger.csv"
+  rows = read_csv(ledger_path)
+  by_id = {row.get("content_id", ""): row for row in rows}
+  existing = by_id.get(content_id)
+  day_match = re.search(r"Day\s*(\d+)", content_id, re.IGNORECASE)
+  day_label = f"Day {day_match.group(1)}" if day_match else ""
+  artifacts = package.get("artifacts", {})
+  desired = {
+    **{field: existing.get(field, "") if existing else "" for field in CONTENT_LEDGER_FIELDS},
+    "content_id": content_id,
+    "date": date,
+    "column": content_type,
+    "day_label": existing.get("day_label", "") if existing else day_label,
+    "title": str(package.get("title", "")).strip() or (existing.get("title", "") if existing else ""),
+    "status": "exported",
+    "inbox_ref": (existing.get("inbox_ref", "") if existing else "") or f"01_inbox/{date}/{content_type}/{sequence}.md",
+    "script_ref": (existing.get("script_ref", "") if existing else "") or f"02_scripts/{date}/{content_type}/{sequence}.md",
+    "recording_ref": (existing.get("recording_ref", "") if existing else "") or f"03_recordings/{date}/{content_type}/{sequence}/",
+    "workspace_ref": (existing.get("workspace_ref", "") if existing else "") or f"04_videos/{date}/{content_type}/{sequence}/",
+    "export_ref": str(artifacts.get("video", "")).strip() or (existing.get("export_ref", "") if existing else ""),
+    "cover_ref": str(artifacts.get("cover3x4", "")).strip() or (existing.get("cover_ref", "") if existing else ""),
+    "notes": (existing.get("notes", "") if existing else "") or "Finalized from publish-ready package.",
+  }
+
+  changed = existing is None or any(
+    (existing or {}).get(field, "") != desired.get(field, "")
+    for field in CONTENT_LEDGER_FIELDS
+  )
+  if not changed:
+    return {"changed": False, "contentId": content_id, "ledgerPath": str(ledger_path)}
+
+  by_id[content_id] = desired
+  atomic_write_csv(
+    ledger_path,
+    sorted(by_id.values(), key=lambda row: (row.get("date", ""), row.get("content_id", ""))),
+  )
+  return {
+    "changed": True,
+    "contentId": content_id,
+    "ledgerPath": str(ledger_path),
+    "status": desired["status"],
   }
 
 

@@ -8,8 +8,10 @@ It decouples long-term workflow state from daily folders and large media files:
 - `content-ledger.csv`: one row per content item across columns.
 - `production-stats.csv`: production cost metrics recorded after final export.
 - `publish-ledger.csv`: publish metadata copied from the legacy log ledger.
+- `media-retention-ledger.csv`: append-only audit row for each exact video path
+  deleted by the explicitly enabled retention runner.
 - `observations/`: append-only updates from Codex, CLI, users, validators, and audits.
-- `evolution/`: deterministic daily TopK selection and candidate backlog.
+- `evolution/`: deterministic daily TopK selection, candidate backlog, and local completion ledger.
 - `runs/`: generic 3.0 production run state, one `run.json` per content item.
 - `locks/`: runtime leases for observation, production, and evolution writers.
 
@@ -18,6 +20,11 @@ It decouples long-term workflow state from daily folders and large media files:
 All valid daily updates are retained in `observations/YYYY-MM-DD.ndjson`.
 
 The default daily TopK is `3`, configured in `00_system/evolution-policy.json`. Only the selected TopK enters the day's candidate update list. Remaining updates stay in backlog or `needs-evidence`; they are not deleted.
+
+After a TopK item has verification evidence, `vp evolve complete` appends it to
+`evolution/completed/YYYY-MM-DD.json`. Completed items stay visible in the
+locked TopK and cannot return to Candidate or backlog. The ledger remains local;
+its reusable JSON Schema and example live under `00_system/contracts/`.
 
 P0 is analysis-only and does not modify formal Skills, Rules, Hooks, Agents, production scripts, or versions.
 

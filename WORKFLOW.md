@@ -29,7 +29,7 @@ Before writing today's idea:
 npm run new-day -- YYYY-MM-DD
 ```
 
-Write the raw wording to `01_inbox/YYYY-MM-DD.md`. The Inbox is evidence and is
+Write the raw wording to `01_inbox/YYYY-MM-DD/<content-type>/<sequence>.md`. The Inbox is evidence and is
 never summarized or rewritten in place.
 
 Run a lightweight input compliance review. Mark risky claims, advertising-law
@@ -45,7 +45,7 @@ Use these style layers in order:
 3. public `00_system/defaults/speaking-style.md`;
 4. script Skill rules.
 
-Write `02_scripts/YYYY-MM-DD.md`. Keep facts and reasoning order, use speakable
+Write `02_scripts/YYYY-MM-DD/<content-type>/<sequence>.md`. Keep facts and reasoning order, use speakable
 sentences, and avoid generic marketing hooks. Stop here until the user has
 recorded and explicitly requests editing.
 
@@ -54,7 +54,7 @@ recorded and explicitly requests editing.
 The user places source media in:
 
 ```text
-03_recordings/YYYY-MM-DD/
+03_recordings/YYYY-MM-DD/<content-type>/<sequence>/
 ```
 
 Rules:
@@ -99,7 +99,7 @@ Subtitle rules:
 
 ## Stage 5: Combined Review Gate
 
-Create `04_videos/YYYY-MM-DD/REVIEW.md` containing:
+Create `04_videos/YYYY-MM-DD/<content-type>/<sequence>/REVIEW.md` containing:
 
 - 3:4 cover;
 - 4:3 cover;
@@ -146,7 +146,7 @@ Never delete the legacy route during a v2 rollout.
 The final export folder must contain:
 
 ```text
-05_exports/YYYY-MM-DD/
+05_exports/YYYY-MM-DD/<content-type>/<sequence>/
 ├── *_video-diary.mp4
 ├── *_cover_3x4.jpg
 ├── *_cover_4x3.jpg
@@ -164,7 +164,22 @@ Generate from the corrected real-audio transcript:
 Record the run in `00_state/production-stats.csv` on the same day. Completion is
 not reached until the user receives the publish copy and production result.
 
-## Stage 8: Production Issues And Evolution
+## Stage 8: Optional Media Retention
+
+Fresh workspaces keep retention disabled. After explicit local opt-in, run the
+deterministic retention CLI once per day. A three-day window preserves today
+and the previous two dates. The runner requires a publish-ready package, a
+recorded production-statistics row, no production lock, and an exact path under
+the three media roots. It unlinks files one path at a time, never directories,
+and writes both a run manifest and append-only ledger.
+
+```bash
+python3 09_tools/vp.py cleanup run --date YYYY-MM-DD --apply --if-enabled
+```
+
+Text, subtitles, covers, publish metadata, statistics, and Run State remain.
+
+## Stage 9: Production Issues And Evolution
 
 When a production blocker appears, record it immediately as an Observation with
 the stage, impact, evidence, temporary workaround, and content ID. Keep the
@@ -176,9 +191,10 @@ After the video and publish package are complete:
 1. classify the blocker as transient environment, source/input, operator, or
    reproducible system defect;
 2. leave uncertain items as `needs-evidence`;
-3. add evidence and promote confirmed system defects;
+3. promote only reproducible, repeated, blocking, material-rework, high-impact,
+   or deterministically confirmed defects;
 4. run the next Daily Engineering Loop only after production locks are gone;
-5. keep an already locked TopK unchanged unless a P0 issue blocks Stable.
+5. re-rank all unfinished issue-ready work and keep at most three active slots.
 
 The daily evolution report generates one local `生产问题清单` from these
 Observations. It is a view, not a duplicate issue ledger.
@@ -195,8 +211,9 @@ When no production lock exists:
 python3 09_tools/vp.py evolve --date YYYY-MM-DD
 ```
 
-The first daily TopK uses the configured limit of three and remains frozen.
-Further observations stay in backlog. Candidate implementation, testing, release
+The rolling Top-K uses the configured limit of three. Unfinished items carry
+across dates and participate in the next ranking; verified completion releases a
+slot immediately. Candidate implementation, process feedback, testing, release
 activation, and rollback are separate reviewed actions.
 
 ## Stop and Safety Rules

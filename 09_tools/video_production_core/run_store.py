@@ -103,14 +103,14 @@ def atomic_write_json(path: Path, payload: Dict[str, Any]) -> None:
       os.unlink(temporary_name)
 
 
-def default_run_id(root: Path, date: str, content_type: str) -> str:
-  if content_type == "video-diary":
+def default_run_id(root: Path, date: str, content_type: str, sequence: str = "001") -> str:
+  if content_type == "video-diary" and sequence == "001":
     counter_path = root / "00_state" / "day-counter.json"
     if counter_path.exists():
       counter = load_json(counter_path)
       if counter.get("updatedAt") == date and counter.get("lastContentId"):
         return validate_run_id(str(counter["lastContentId"]))
-  return validate_run_id(f"{date}_{content_type}")
+  return validate_run_id(f"{date}_{content_type}_{sequence}")
 
 
 def system_version(root: Path, channel: str) -> str:
@@ -128,18 +128,25 @@ def start_run(
   run_id: Optional[str] = None,
   channel: str = "stable",
   actor: str = "cli",
+  sequence: str = "001",
 ) -> Dict[str, Any]:
   content_types = {item["id"]: item for item in get_content_types(root, enabled_only=True)}
   if content_type not in content_types:
     raise RunStateError(f"Unknown or disabled content type: {content_type}")
   content = content_types[content_type]
   profile = get_profile(root, content["profile"])
-  resolved_id = validate_run_id(run_id) if run_id else default_run_id(root, date, content_type)
+  resolved_id = validate_run_id(run_id) if run_id else default_run_id(
+    root, date, content_type, sequence
+  )
   path = run_path(root, resolved_id)
   with run_lock(root, resolved_id):
     if path.exists():
       existing = load_json(path)
-      if existing.get("date") != date or existing.get("contentType") != content_type:
+      if (
+        existing.get("date") != date
+        or existing.get("contentType") != content_type
+        or existing.get("sequence", "001") != sequence
+      ):
         raise RunStateError(f"Run id already belongs to another content item: {resolved_id}")
       if existing.get("channel") != channel:
         raise RunStateError(
@@ -154,6 +161,7 @@ def start_run(
       "id": resolved_id,
       "workflowId": profile["id"],
       "contentType": content_type,
+      "sequence": sequence,
       "date": date,
       "title": title,
       "channel": channel,

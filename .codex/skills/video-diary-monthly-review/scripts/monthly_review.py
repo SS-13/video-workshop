@@ -405,7 +405,7 @@ def build_monthly_stats(
 
   for row in ledger_rows:
     date = row.get("date", "")
-    log_path = root / "06_logs" / f"{date}.md"
+    log_path = root / "06_logs" / date / "video-diary" / "001.md"
 
     duration_seconds = parse_duration_to_seconds(row.get("video_duration"))
     if duration_seconds is None:

@@ -7,6 +7,8 @@ package.
 The repository contains the reusable production system. Personal content and
 media stay on the local machine.
 
+[简体中文 README](README.zh-CN.md)
+
 ## What It Covers
 
 - raw idea intake and teleprompter script writing;
@@ -16,7 +18,7 @@ media stay on the local machine.
 - one combined cover/SRT review gate;
 - one-pass final rendering with optional confirmed inserts;
 - publish title, description, chapters, and production metrics;
-- Observation -> TopK -> Daily Engineering Loop;
+- Observation -> Top-K Issues -> Daily Engineering Loop;
 - stable v2 production with a preserved legacy fallback.
 
 ## AI Agent Bootstrap Contract
@@ -39,6 +41,7 @@ packages, downloading a transcription model, or using administrator access.
 | Node.js + npm | Node 20+ | project commands and JavaScript helpers |
 | FFmpeg + FFprobe | build with `ass`, `subtitles`, and `drawtext` filters | audio extraction, subtitles, final render |
 | Pillow | version from `requirements.txt` | cover rendering |
+| fontTools | version from `requirements.txt` | verify selected font glyph coverage |
 | CJK font | one readable Chinese font | Chinese covers and subtitles |
 | Local speech-to-text | `whisper.cpp` plus a GGML model, or OpenAI Whisper | real-audio transcription and timing |
 
@@ -138,6 +141,9 @@ Before initialization, the Agent asks the user to confirm:
 The Agent reports the selected values back and waits for confirmation before
 running setup.
 
+When a command omits the content date, the local content day changes at 09:00:
+inputs before 09:00 use the previous date. An explicit `--date` always wins.
+
 Only offer values the installed renderer supports. If the user requests a
 different platform or cover ratio, retain it as an adapter requirement and do
 not claim the default renderer can already produce it.
@@ -179,11 +185,13 @@ npm run new-day -- YYYY-MM-DD --day 42
 The user can now send a raw idea. The Agent preserves it in `01_inbox/`, runs
 input compliance review, and writes the recording script to `02_scripts/` when
 asked. After the user places the real recording in
-`03_recordings/YYYY-MM-DD/`, transcription can start directly:
+`03_recordings/YYYY-MM-DD/video-diary/001/`, transcription can start directly:
 
 ```bash
 npm run subtitle:transcribe -- \
   --date YYYY-MM-DD \
+  --content-type video-diary \
+  --sequence 001 \
   --engine auto \
   --model base \
   --word-timestamps
@@ -239,6 +247,26 @@ Fallback:
 npm run edit:render-day-legacy -- --date YYYY-MM-DD --mode standard
 ```
 
+## Local Media Retention
+
+Retention is disabled on a fresh clone. After explicit local opt-in, a
+three-day window keeps today and the previous two dates. Older video media is
+eligible only when its content item has a publish-ready package and a matching
+production-statistics row.
+
+```bash
+npm run cleanup -- configure --enabled --days 3
+npm run cleanup -- status --date YYYY-MM-DD
+npm run cleanup -- run --date YYYY-MM-DD
+npm run cleanup -- run --date YYYY-MM-DD --apply --if-enabled
+```
+
+The runner skips while production is locked. It deletes no directories and
+preserves scripts, subtitles, covers, publish copy, JSON, statistics, and Run
+State. Every exact deleted path is appended to the local retention ledger.
+Doctor and the shared v2/legacy render entrypoint also refuse to render below
+the configured free-space threshold.
+
 ## Cover Design System
 
 Cover design stays inside the existing `video-diary-cover` Skill. Pencil is
@@ -286,12 +314,79 @@ These files never need to enter the public repository.
 ## Daily Evolution
 
 ```bash
-python3 09_tools/vp.py observe --summary "subtitle was early" --priority P1
+python3 09_tools/vp.py observe --summary "subtitle was early" --priority P1 \
+  --workflow-step subtitle-review --reproducible --causes-rework
+python3 09_tools/vp.py evolve triage CAND-xxxxxxxxxxxx \
+  --date YYYY-MM-DD --reproduction "resume without word timing" --blocking
 python3 09_tools/vp.py evolve --date YYYY-MM-DD
+python3 09_tools/vp.py evolve complete CAND-xxxxxxxxxxxx \
+  --date YYYY-MM-DD \
+  --change-type feature \
+  --evidence path/to/test-report.md \
+  --process-action test
+python3 09_tools/vp.py evolve issues sync \
+  --date YYYY-MM-DD \
+  --if-enabled
 ```
 
-All observations are retained. At most three enter the first locked TopK for a
-day. The Loop proposes candidates; it does not silently rewrite the system.
+All observations are retained, but they do not automatically become Issues. By
+default, three unresolved work slots form a rolling Top-K. Reproducible,
+repeated, blocking, high-impact, material-rework, deterministic, or explicitly
+approved work may cross the Issue-readiness gate. Priority only orders work
+after that gate. New eligible work is reconciled immediately; unfinished work
+carries across dates, and a verified completion releases its slot and refills it
+from backlog. Completions enter an append-only
+local ledger and become unassigned Release candidates; they do not bump or
+activate a version. The implementation, contract, tests, and CLI are public,
+while real completion evidence remains local.
+
+The optional GitHub projection is reconciled after `observe`, `evolve`, and
+verified completion. It creates one Issue per active Top-K candidate.
+Issue-ready candidates outside the active slots are also projected with
+`status:backlog`, so the public queue retains the work that will refill a slot.
+Each Issue includes the affected workflow step, reproduction/run context, user
+or artifact loss, priority reason, proposed fix, validation plan, and process or
+gate feedback decision.
+Public-safe summaries become the title without a Top-K prefix; private scopes use
+a redacted projection. Labels classify `bug`, `feature`, or `other`; the single priority
+label is replaced as aging raises `P3 -> P2 -> P1 -> P0`. Active, displaced,
+and completed work uses `status:topk`, `status:backlog`, and `status:verified`.
+A linked PR uses `Closes #N`, and GitHub closes it only after the verified PR
+merges into the default branch.
+
+GitHub Issues are an execution queue, not the end of the workflow. Every active
+Top-K item follows this loop:
+
+```bash
+# Resolve the active candidate into an Issue, branch, PR body, and completion command
+python3 09_tools/vp.py evolve issues start CAND-xxxxxxxxxxxx \
+  --date YYYY-MM-DD --repo OWNER/REPO --json
+
+# Create the suggested repair branch, for example:
+git switch -c fix/topk-cand-xxxxxxxxxxxx
+
+# Implement the smallest fix and add a regression test.
+# Record evidence only after the verification is available.
+python3 09_tools/vp.py evolve complete CAND-xxxxxxxxxxxx \
+  --date YYYY-MM-DD --change-type bugfix \
+  --evidence path/to/test-report.md --process-action test
+
+# The PR must keep the generated Closes #N reference.
+python3 09_tools/vp.py evolve issues check-pr \
+  --repo OWNER/REPO --pr N --require-topk
+
+# Verify required checks and queue GitHub auto-merge.
+python3 09_tools/vp.py evolve issues merge \
+  --repo OWNER/REPO --pr N --apply --auto
+```
+
+`issues start` does not edit production code; it gives an Agent a bounded repair
+task. Top-K repair branches use `fix/topk-<candidate-id>`. A repair PR must target
+`main`, be Ready for review, reference a verified Top-K Issue, and pass all required
+checks. `.github/workflows/topk-merge.yml` enables auto-merge only for same-repository
+Top-K repair branches and never executes PR branch code. GitHub closes the Issue only
+after the PR reaches `main`; Fork PRs and ordinary PRs are not auto-merged by this
+workflow.
 
 ## Optional Integrations
 
@@ -306,6 +401,8 @@ ignored by Git.
 - [START_HERE.md](START_HERE.md): first clone and first video
 - [PIPELINE.md](PIPELINE.md): system and artifact map
 - [WORKFLOW.md](WORKFLOW.md): current 3.0 production workflow
+- [MIGRATION.md](MIGRATION.md): date-first workspace migration and recovery
+- [MIGRATION.zh-CN.md](MIGRATION.zh-CN.md): 中文迁移与恢复说明
 - [.codex/agents/README.md](.codex/agents/README.md): Agent ownership
 - [CONTRIBUTING.md](CONTRIBUTING.md): PR scope, tests, and privacy rules
 

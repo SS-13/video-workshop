@@ -7,7 +7,7 @@ description: Record Video Workshop run logs, token/time estimates, publish metad
 
 ## Core Rule
 
-Write durable operational records into `06_logs/YYYY-MM-DD.md` for daily runtime notes.
+Write durable operational records into `06_logs/YYYY-MM-DD/<content-type>/<sequence>.md` for runtime notes.
 
 For long-term structured data, use `00_state/` as the canonical layer:
 
@@ -33,7 +33,7 @@ All content columns use the same production ledger. Distinguish content with `co
 
 ## What To Record
 
-In `06_logs/YYYY-MM-DD.md`, update:
+In the matching date/type/sequence Log file, update:
 
 - 状态
 - 最终视频
@@ -62,14 +62,14 @@ Also write the same values to `00_state/production-stats.csv` immediately after 
 Use:
 
 ```bash
-python3 .codex/skills/video-diary-log/scripts/record-production-stats.py --date YYYY-MM-DD --column video-diary --day-label "Day NN" --title "TITLE" --video-path 05_exports/YYYY-MM-DD/FILE.mp4 --cover-path 05_exports/YYYY-MM-DD/COVER.jpg --total-minutes MINUTES --estimated-tokens "120k" --update-daily-log
+python3 .codex/skills/video-diary-log/scripts/record-production-stats.py --date YYYY-MM-DD --column video-diary --sequence 001 --day-label "Day NN" --title "TITLE" --video-path 05_exports/YYYY-MM-DD/video-diary/001/FILE.mp4 --cover-path 05_exports/YYYY-MM-DD/video-diary/001/COVER.jpg --total-minutes MINUTES --estimated-tokens "120k" --update-daily-log
 ```
 
 For non-diary columns:
 
 ```bash
-python3 .codex/skills/video-diary-log/scripts/record-production-stats.py --date YYYY-MM-DD --column suisuinian --title "TITLE" --video-path 05_exports/suisuinian/YYYY-MM-DD_001/FILE.mp4 --cover-path 05_exports/suisuinian/YYYY-MM-DD_001/COVER.jpg --total-minutes MINUTES --estimated-tokens "80k" --allow-missing-time
-python3 .codex/skills/video-diary-log/scripts/record-production-stats.py --date YYYY-MM-DD --column reading-note --title "BOOK_OR_TOPIC" --video-path 05_exports/reading-note/YYYY-MM-DD_001/FILE.mp4 --cover-path 05_exports/reading-note/YYYY-MM-DD_001/COVER.jpg --total-minutes MINUTES --estimated-tokens "80k" --allow-missing-time
+python3 .codex/skills/video-diary-log/scripts/record-production-stats.py --date YYYY-MM-DD --column suisuinian --sequence 001 --title "TITLE" --video-path 05_exports/YYYY-MM-DD/suisuinian/001/FILE.mp4 --cover-path 05_exports/YYYY-MM-DD/suisuinian/001/COVER.jpg --total-minutes MINUTES --estimated-tokens "80k" --allow-missing-time
+python3 .codex/skills/video-diary-log/scripts/record-production-stats.py --date YYYY-MM-DD --column reading-note --sequence 001 --title "BOOK_OR_TOPIC" --video-path 05_exports/YYYY-MM-DD/reading-note/001/FILE.mp4 --cover-path 05_exports/YYYY-MM-DD/reading-note/001/COVER.jpg --total-minutes MINUTES --estimated-tokens "80k" --allow-missing-time
 ```
 
 For publish retro, record when available:

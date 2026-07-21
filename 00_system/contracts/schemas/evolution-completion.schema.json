@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "video-production/evolution-completion.schema.json",
+  "type": "object",
+  "required": ["schemaVersion", "date", "completed"],
+  "properties": {
+    "schemaVersion": {"type": "integer", "minimum": 1},
+    "date": {"type": "string"},
+    "updatedAt": {"type": "string"},
+    "completed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "completionId",
+          "candidateId",
+          "summary",
+          "priority",
+          "rank",
+          "completedAt",
+          "actor",
+          "validationEvidence",
+          "artifacts",
+          "releaseCandidate",
+          "releaseTarget",
+          "changeType",
+          "recommendedSemVer",
+          "compatibilityImpact",
+          "requiresMigration",
+          "requiresCanary",
+          "status"
+        ],
+        "properties": {
+          "completionId": {"type": "string"},
+          "candidateId": {"type": "string"},
+          "summary": {"type": "string"},
+          "priority": {"type": "string", "enum": ["P0", "P1", "P2", "P3"]},
+          "rank": {"type": "integer", "minimum": 1},
+          "completedAt": {"type": "string"},
+          "actor": {"type": "string"},
+          "validationEvidence": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "artifacts": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "releaseCandidate": {"type": "boolean"},
+          "releaseTarget": {"type": ["string", "null"]},
+          "changeType": {
+            "type": "string",
+            "enum": ["bugfix", "feature", "major-evolution"]
+          },
+          "recommendedSemVer": {
+            "type": "string",
+            "enum": ["patch", "minor", "major"]
+          },
+          "compatibilityImpact": {"type": "string"},
+          "requiresMigration": {"type": "boolean"},
+          "requiresCanary": {"type": "boolean"},
+          "processAction": {
+            "type": "string",
+            "enum": ["none", "test", "rule", "gate", "runbook", "multiple"]
+          },
+          "processNote": {"type": "string"},
+          "status": {"type": "string", "enum": ["completed"]}
+        }
+      }
+    }
+  }
+}

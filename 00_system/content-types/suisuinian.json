@@ -4,7 +4,7 @@
   "displayName": "碎碎念",
   "enabled": true,
   "default": false,
-  "pathStrategy": "column-first",
+  "pathStrategy": "date-content-sequence",
   "counter": {
     "enabled": false,
     "type": "sequence"

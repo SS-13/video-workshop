@@ -10,6 +10,37 @@ permissions:
   contents: read
 
 jobs:
+  issue-gate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Python dependencies
+        run: python3 -m pip install -r requirements.txt
+      - name: Verified TopK issue closure gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [[ "$HEAD_REF" == fix/topk-* ]]; then
+            REQUIRE_TOPK="--require-topk"
+          else
+            REQUIRE_TOPK=""
+          fi
+          python3 09_tools/vp.py evolve issues check-pr \
+            --repo "$REPOSITORY" \
+            --pr "$PR_NUMBER" \
+            $REQUIRE_TOPK
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -37,3 +68,47 @@ jobs:
           node --check 09_tools/new-day.mjs
           node --check 09_tools/audit-workflow.mjs
           node --check 09_tools/feishu-remote-script-worker.mjs
+
+  clean-clone-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Python dependencies
+        run: python3 -m pip install -r requirements.txt
+      - name: Initialize clean workspace
+        run: |
+          npm run setup
+          npm run doctor
+          npm run context -- --json
+      - name: Create date-first content
+        run: |
+          npm run new-day -- 2030-01-01 --day 1
+          test -f 01_inbox/2030-01-01/video-diary/001.md
+          test -d 03_recordings/2030-01-01/video-diary/001
+      - name: Exercise Daily Evolution
+        run: |
+          python3 09_tools/vp.py observe \
+            --date 2030-01-01 \
+            --summary "Clean-clone smoke candidate" \
+            --category new-capability \
+            --priority P1 \
+            --scope system-core \
+            --promote
+          python3 09_tools/vp.py evolve --date 2030-01-01
+          test -f 00_state/evolution/2030-01-01.json
+      - name: Exercise migration preview and apply
+        run: |
+          printf '# Legacy fixture\n' > 01_inbox/2030-01-02.md
+          python3 09_tools/migrate-date-first-layout.py \
+            --report 17_reports/migrations/date-first-dry-run.json
+          test -f 01_inbox/2030-01-02.md
+          python3 09_tools/migrate-date-first-layout.py \
+            --apply \
+            --report 17_reports/migrations/date-first-apply.json
+          test -f 01_inbox/2030-01-02/video-diary/001.md

@@ -7,6 +7,8 @@ import subprocess
 import sys
 import time
 
+from workflow_state import content_media_dir
+
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".MP4", ".MOV", ".M4V"}
@@ -64,15 +66,15 @@ def probe_duration(video_path):
   return float(json.loads(output)["format"]["duration"])
 
 
-def read_manifest(root, date):
-  manifest_path = root / "04_videos" / date / "preprocessed" / "preprocess_manifest.json"
+def read_manifest(root, date, content_type="video-diary", sequence="001"):
+  manifest_path = content_media_dir(root, "04_videos", date, content_type, sequence) / "preprocessed" / "preprocess_manifest.json"
   if not manifest_path.exists():
     raise SystemExit(f"Missing preprocess manifest: {manifest_path}")
   return json.loads(manifest_path.read_text(encoding="utf-8"))
 
 
-def choose_usable_input(root, date, requested_input):
-  manifest = read_manifest(root, date)
+def choose_usable_input(root, date, requested_input, content_type="video-diary", sequence="001"):
+  manifest = read_manifest(root, date, content_type, sequence)
   items = manifest.get("items", [])
   if not items:
     raise SystemExit("Preprocess manifest has no items.")
@@ -101,8 +103,9 @@ def choose_usable_input(root, date, requested_input):
   return usable
 
 
-def default_output_path(root, date, mode):
-  return root / "04_videos" / date / f"{date}_{mode}_ass_subtitled.mp4"
+def default_output_path(root, date, mode, content_type="video-diary", sequence="001"):
+  workspace = content_media_dir(root, "04_videos", date, content_type, sequence)
+  return workspace / f"{date}_{content_type}_{sequence}_{mode}_ass_subtitled.mp4"
 
 
 def print_dry_run(args):
@@ -142,6 +145,8 @@ def main():
     description="Run the deterministic daily video edit pipeline."
   )
   parser.add_argument("--date", required=True)
+  parser.add_argument("--content-type", "--column", dest="content_type", default="video-diary")
+  parser.add_argument("--sequence", default="001")
   parser.add_argument("--input")
   parser.add_argument("--output")
   parser.add_argument("--mode", choices=["standard", "polished"], default="standard")
@@ -170,7 +175,9 @@ def main():
   root = Path.cwd()
   stages = []
   source_video = None
-  subtitle_dir = root / "04_videos" / args.date / "subtitles"
+  content_cli = ["--content-type", args.content_type, "--sequence", args.sequence]
+  workspace = content_media_dir(root, "04_videos", args.date, args.content_type, args.sequence)
+  subtitle_dir = workspace / "subtitles"
   subtitle_dir.mkdir(parents=True, exist_ok=True)
 
   if not args.skip_deps:
@@ -184,6 +191,7 @@ def main():
         SCRIPT_DIR / "preprocess-recording.py",
         "--date",
         args.date,
+        *content_cli,
         "--all",
         "--tail-window",
         "999999",
@@ -192,7 +200,9 @@ def main():
       stages,
     )
 
-    source_video = choose_usable_input(root, args.date, args.input)
+    source_video = choose_usable_input(
+      root, args.date, args.input, args.content_type, args.sequence
+    )
     raw_srt = subtitle_dir / f"{args.date}_transcribed_raw.srt"
     corrected_srt = subtitle_dir / f"{args.date}_transcribed_corrected.srt"
 
@@ -203,6 +213,7 @@ def main():
         SCRIPT_DIR / "transcribe-recording-to-srt.py",
         "--date",
         args.date,
+        *content_cli,
         "--input",
         source_video,
         "--output",
@@ -220,6 +231,7 @@ def main():
         sys.executable,
         SCRIPT_DIR / "correct-transcript.py",
         args.date,
+        *content_cli,
         "--input",
         raw_srt,
         "--output",
@@ -231,7 +243,7 @@ def main():
     final_srt = corrected_srt
 
     if args.mode == "polished":
-      no_filler_video = root / "04_videos" / args.date / "preprocessed" / f"{source_video.stem}_no-fillers.mp4"
+      no_filler_video = workspace / "preprocessed" / f"{source_video.stem}_no-fillers.mp4"
       no_filler_srt = subtitle_dir / f"{args.date}_rough_no-fillers.srt"
       run_step(
         "remove_fillers",
@@ -240,6 +252,10 @@ def main():
           SCRIPT_DIR / "remove-filler-words.py",
           "--date",
           args.date,
+          "--content-type",
+          args.content_type,
+          "--sequence",
+          args.sequence,
           "--input-video",
           source_video,
           "--input-srt",
@@ -262,6 +278,7 @@ def main():
           SCRIPT_DIR / "transcribe-recording-to-srt.py",
           "--date",
           args.date,
+          *content_cli,
           "--input",
           final_video_input,
           "--output",
@@ -279,6 +296,7 @@ def main():
           sys.executable,
           SCRIPT_DIR / "correct-transcript.py",
           args.date,
+          *content_cli,
           "--input",
           clean_raw_srt,
           "--output",
@@ -324,7 +342,7 @@ def main():
     )
 
   duration = probe_duration(final_video_input)
-  report_path = root / "04_videos" / args.date / "edit-run" / f"{args.date}_{args.mode}_render_day_report.json"
+  report_path = workspace / "edit-run" / f"{args.date}_{args.content_type}_{args.sequence}_{args.mode}_render_day_report.json"
   report_path.parent.mkdir(parents=True, exist_ok=True)
 
   if args.stop_after_srt:
@@ -358,6 +376,7 @@ def main():
         SCRIPT_DIR / "generate-video-diary-caption-assets.py",
         "--date",
         args.date,
+        *content_cli,
         "--duration",
         f"{duration:.3f}",
         "--srt-input",
@@ -368,7 +387,9 @@ def main():
     )
   elif not ass_input.exists():
     raise SystemExit(f"Missing ASS for resume: {ass_input}")
-  output_path = resolve_path(root, args.output) if args.output else default_output_path(root, args.date, args.mode)
+  output_path = resolve_path(root, args.output) if args.output else default_output_path(
+    root, args.date, args.mode, args.content_type, args.sequence
+  )
   output_path.parent.mkdir(parents=True, exist_ok=True)
   run_step(
     "render_ass_video",
@@ -391,6 +412,8 @@ def main():
 
   report = {
     "date": args.date,
+    "contentType": args.content_type,
+    "sequence": args.sequence,
     "mode": args.mode,
     "model": args.model,
     "input": str(source_video or final_video_input),

@@ -46,11 +46,27 @@ from video_production_core.workspace_bootstrap import (  # noqa: E402
 from video_production_core.canary_validation import validate_real_canary  # noqa: E402
 from video_production_core.canary_adoption import adopt_canary_run  # noqa: E402
 from video_production_core.active_finalization import finalize_active_run  # noqa: E402
+from video_production_core.content_date import default_content_date  # noqa: E402
 from video_production_core.cover_workflow import (  # noqa: E402
   CoverWorkflowError,
   list_cover_history,
   make_cover_pair,
   register_pencil_design,
+)
+from video_production_core.github_issue_sync import (  # noqa: E402
+  GitHubClient,
+  GitHubIssueSyncError,
+  build_issue_work_packet,
+  check_pull_request_merge_gate,
+  check_pull_request_issue_gate,
+  resolve_repository,
+  sync_topk_issues,
+)
+from video_production_core.media_retention import (  # noqa: E402
+  MediaRetentionError,
+  build_retention_plan,
+  configure_retention,
+  run_retention,
 )
 from video_production_core.run_store import (  # noqa: E402
   RunStateError,
@@ -62,6 +78,9 @@ from video_production_core.run_store import (  # noqa: E402
   validate_run,
 )
 from evolution_loop import (  # noqa: E402
+  VALID_CHANGE_TYPES,
+  VALID_IMPACT_LEVELS,
+  VALID_PROCESS_ACTIONS,
   EvolutionDeferred,
   EvolutionError,
   LeaseBusy,
@@ -69,13 +88,15 @@ from evolution_loop import (  # noqa: E402
   VALID_CATEGORIES,
   VALID_PRIORITIES,
   VALID_SCOPES,
+  complete_candidate,
+  record_candidate_triage,
   record_observation,
   run_evolution,
 )
 
 
 def today() -> str:
-  return datetime.now().astimezone().date().isoformat()
+  return default_content_date()
 
 
 def json_envelope(root: Path, data: Any) -> Dict[str, Any]:
@@ -114,6 +135,76 @@ def add_common_json_flag(parser: argparse.ArgumentParser) -> None:
   parser.add_argument("--json", action="store_true", help="Print a stable JSON envelope")
 
 
+def load_evolution_policy(root: Path) -> Dict[str, Any]:
+  path = root / "00_system" / "evolution-policy.json"
+  return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+
+
+def realtime_reconcile(
+  root: Path,
+  target_date: str,
+  trigger: str,
+  actor: str,
+  evolution: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+  policy = load_evolution_policy(root)
+  realtime = policy.get("realtime", {})
+  triggers = set(realtime.get("triggers", []))
+  if not realtime.get("enabled", False) or trigger not in triggers:
+    return {"enabled": False, "trigger": trigger, "status": "disabled"}
+
+  if evolution is None:
+    try:
+      evolution = run_evolution(root, target_date, actor=actor)
+    except EvolutionDeferred as error:
+      return {
+        "enabled": True,
+        "trigger": trigger,
+        "status": "deferred",
+        "locks": error.locks,
+      }
+
+  sync_result: Dict[str, Any] = {"status": "disabled"}
+  if realtime.get("syncGitHubOnChange", False):
+    try:
+      synced = sync_topk_issues(root, target_date, if_enabled=True)
+      sync_result = {
+        "status": "skipped" if synced.get("skipped") else "succeeded",
+        "created": len(synced.get("created", [])),
+        "updated": len(synced.get("updated", [])),
+        "unchanged": len(synced.get("unchanged", [])),
+        "repository": synced.get("repository", ""),
+        "reason": synced.get("reason", ""),
+      }
+    except GitHubIssueSyncError as error:
+      sync_result = {"status": "failed", "error": str(error)}
+      if realtime.get("githubFailureIsBlocking", False):
+        raise
+
+  return {
+    "enabled": True,
+    "trigger": trigger,
+    "status": "succeeded",
+    "revision": evolution.get("revision"),
+    "selectionMode": evolution.get("selectionMode"),
+    "topKChanges": evolution.get("topKChanges", {}),
+    "statePath": evolution.get("statePath", ""),
+    "githubIssueSync": sync_result,
+  }
+
+
+def add_evolve_run_arguments(parser: argparse.ArgumentParser) -> None:
+  parser.add_argument("--date", default=today())
+  parser.add_argument("--top-k", type=int, default=None)
+  parser.add_argument("--actor", default="system-steward-agent")
+  parser.add_argument(
+    "--reselect",
+    action="store_true",
+    help="Explicitly recalculate today's TopK instead of preserving the first selection",
+  )
+  add_common_json_flag(parser)
+
+
 def build_parser() -> argparse.ArgumentParser:
   parser = argparse.ArgumentParser(prog="vp", description="Video production system CLI")
   parser.add_argument("--root", help="Workspace root; defaults to upward discovery or VIDEO_PRODUCTION_ROOT")
@@ -128,6 +219,38 @@ def build_parser() -> argparse.ArgumentParser:
   context = subparsers.add_parser("context", help="Show the ordered AI read list and local corpus")
   add_common_json_flag(context)
 
+  cleanup = subparsers.add_parser("cleanup", help="Inspect or run opt-in local media retention")
+  cleanup_subparsers = cleanup.add_subparsers(dest="cleanup_action", required=True)
+  cleanup_status = cleanup_subparsers.add_parser(
+    "status",
+    help="Show retention configuration and current deletion candidates",
+  )
+  cleanup_status.add_argument("--date", default=today())
+  add_common_json_flag(cleanup_status)
+  cleanup_configure = cleanup_subparsers.add_parser(
+    "configure",
+    help="Enable, disable, or change the local retention window",
+  )
+  cleanup_configure.add_argument(
+    "--enabled",
+    action=argparse.BooleanOptionalAction,
+    default=None,
+  )
+  cleanup_configure.add_argument("--days", type=int, default=None)
+  add_common_json_flag(cleanup_configure)
+  cleanup_run = cleanup_subparsers.add_parser(
+    "run",
+    help="Build a safe deletion plan; pass --apply to delete approved candidates",
+  )
+  cleanup_run.add_argument("--date", default=today())
+  cleanup_run.add_argument("--apply", action="store_true")
+  cleanup_run.add_argument(
+    "--if-enabled",
+    action="store_true",
+    help="Exit cleanly when retention is disabled",
+  )
+  add_common_json_flag(cleanup_run)
+
   observe = subparsers.add_parser("observe", help="Record one workflow observation")
   observe.add_argument("--date", default=today())
   observe.add_argument("--summary", required=True)
@@ -141,18 +264,140 @@ def build_parser() -> argparse.ArgumentParser:
   observe.add_argument("--evidence", default="", help="Short evidence note")
   observe.add_argument("--promote", action="store_true", help="User explicitly requested permanent promotion")
   observe.add_argument("--deterministic", action="store_true", help="Finding came from a deterministic validator")
+  observe.add_argument("--workflow-step", default="", help="Production step affected by the observation")
+  observe.add_argument("--reproduction", default="", help="Sanitized reproduction condition or run context")
+  observe.add_argument("--user-impact", default="", help="User or artifact loss caused by the issue")
+  observe.add_argument("--impact-level", choices=VALID_IMPACT_LEVELS, default="unknown")
+  observe.add_argument("--priority-reason", default="")
+  observe.add_argument("--proposed-fix", default="")
+  observe.add_argument("--validation-plan", default="")
+  observe.add_argument("--process-gate", default="", help="Potential rule, test, gate, or runbook update")
+  observe.add_argument("--reproducible", action="store_true")
+  observe.add_argument("--blocking", action="store_true", help="Blocks a usable production artifact")
+  observe.add_argument("--causes-rework", action="store_true", help="Causes material repeated work")
   add_common_json_flag(observe)
 
   evolve = subparsers.add_parser("evolve", help="Run the P0 Daily Engineering Loop")
-  evolve.add_argument("--date", default=today())
-  evolve.add_argument("--top-k", type=int, default=None)
-  evolve.add_argument("--actor", default="system-steward-agent")
-  evolve.add_argument(
-    "--reselect",
-    action="store_true",
-    help="Explicitly recalculate today's TopK instead of preserving the first selection",
+  add_evolve_run_arguments(evolve)
+  evolve_subparsers = evolve.add_subparsers(dest="evolve_action")
+  evolve_run = evolve_subparsers.add_parser(
+    "run",
+    help="Run the Loop while preserving the legacy vp evolve --date form",
   )
-  add_common_json_flag(evolve)
+  add_evolve_run_arguments(evolve_run)
+  evolve_triage = evolve_subparsers.add_parser(
+    "triage",
+    help="Append triage context to an existing Candidate without adding an occurrence",
+  )
+  evolve_triage.add_argument("candidate_id")
+  evolve_triage.add_argument("--date", default=today())
+  evolve_triage.add_argument("--workflow-step", default="")
+  evolve_triage.add_argument("--reproduction", default="")
+  evolve_triage.add_argument("--user-impact", default="")
+  evolve_triage.add_argument("--impact-level", choices=VALID_IMPACT_LEVELS, default="unknown")
+  evolve_triage.add_argument("--priority-reason", default="")
+  evolve_triage.add_argument("--proposed-fix", default="")
+  evolve_triage.add_argument("--validation-plan", default="")
+  evolve_triage.add_argument("--process-gate", default="")
+  evolve_triage.add_argument("--reproducible", action="store_true")
+  evolve_triage.add_argument("--blocking", action="store_true")
+  evolve_triage.add_argument("--causes-rework", action="store_true")
+  evolve_triage.add_argument("--evidence", default="", help="Local-only evidence note")
+  evolve_triage.add_argument("--actor", default="system-steward-agent")
+  add_common_json_flag(evolve_triage)
+  evolve_complete = evolve_subparsers.add_parser(
+    "complete",
+    help="Complete one active Top-K Issue with verification evidence",
+  )
+  evolve_complete.add_argument("candidate_id")
+  evolve_complete.add_argument("--date", default=today())
+  evolve_complete.add_argument("--change-type", choices=VALID_CHANGE_TYPES, required=True)
+  evolve_complete.add_argument("--evidence", action="append", required=True)
+  evolve_complete.add_argument("--artifact", action="append", default=[])
+  evolve_complete.add_argument("--compatibility-impact")
+  evolve_complete.add_argument(
+    "--requires-migration",
+    action=argparse.BooleanOptionalAction,
+    default=None,
+  )
+  evolve_complete.add_argument(
+    "--requires-canary",
+    action=argparse.BooleanOptionalAction,
+    default=None,
+  )
+  evolve_complete.add_argument("--actor", default="system-steward-agent")
+  evolve_complete.add_argument(
+    "--process-action",
+    choices=VALID_PROCESS_ACTIONS,
+    default="none",
+    help="How the verified fix feeds back into tests, rules, gates, or runbooks",
+  )
+  evolve_complete.add_argument("--process-note", default="")
+  add_common_json_flag(evolve_complete)
+
+  evolve_issues = evolve_subparsers.add_parser(
+    "issues",
+    help="Project sanitized TopK work to GitHub Issues",
+  )
+  evolve_issue_subparsers = evolve_issues.add_subparsers(
+    dest="evolve_issue_action",
+    required=True,
+  )
+  evolve_issue_sync = evolve_issue_subparsers.add_parser(
+    "sync",
+    help="Create or update TopK issues and dynamic priority labels",
+  )
+  evolve_issue_sync.add_argument("--date", default=today())
+  evolve_issue_sync.add_argument("--repo", help="GitHub repository as OWNER/REPO")
+  evolve_issue_sync.add_argument("--dry-run", action="store_true")
+  evolve_issue_sync.add_argument(
+    "--if-enabled",
+    action="store_true",
+    help="Exit cleanly when the local GitHub Issues integration is disabled",
+  )
+  add_common_json_flag(evolve_issue_sync)
+  evolve_issue_gate = evolve_issue_subparsers.add_parser(
+    "check-pr",
+    help="Require verified TopK issues before a PR may close them",
+  )
+  evolve_issue_gate.add_argument("--repo", required=True, help="GitHub repository as OWNER/REPO")
+  evolve_issue_gate.add_argument("--pr", type=int, required=True, help="Pull request number")
+  evolve_issue_gate.add_argument(
+    "--require-topk",
+    action="store_true",
+    help="Require at least one Closes #N reference to a managed Top-K Issue",
+  )
+  add_common_json_flag(evolve_issue_gate)
+  evolve_issue_start = evolve_issue_subparsers.add_parser(
+    "start",
+    help="Resolve one active Top-K Issue into a repair branch and PR work packet",
+  )
+  evolve_issue_start.add_argument("candidate_id")
+  evolve_issue_start.add_argument("--date", default=today())
+  evolve_issue_start.add_argument("--repo", help="GitHub repository as OWNER/REPO")
+  evolve_issue_start.add_argument(
+    "--offline",
+    action="store_true",
+    help="Build the local work packet without querying GitHub",
+  )
+  add_common_json_flag(evolve_issue_start)
+  evolve_issue_merge = evolve_issue_subparsers.add_parser(
+    "merge",
+    help="Verify a Top-K repair PR and merge or queue it after required checks pass",
+  )
+  evolve_issue_merge.add_argument("--repo", required=True, help="GitHub repository as OWNER/REPO")
+  evolve_issue_merge.add_argument("--pr", type=int, required=True, help="Pull request number")
+  evolve_issue_merge.add_argument(
+    "--apply",
+    action="store_true",
+    help="Perform the merge action; without it only report readiness",
+  )
+  evolve_issue_merge.add_argument(
+    "--auto",
+    action="store_true",
+    help="Queue GitHub auto-merge instead of merging immediately",
+  )
+  add_common_json_flag(evolve_issue_merge)
 
   system = subparsers.add_parser("system", help="Inspect the generic control plane")
   system_subparsers = system.add_subparsers(dest="system_action", required=True)
@@ -204,6 +449,8 @@ def build_parser() -> argparse.ArgumentParser:
     help="Render and archive one approved daily cover pair",
   )
   cover_make.add_argument("--date", required=True)
+  cover_make.add_argument("--content-type", default="video-diary")
+  cover_make.add_argument("--sequence", default="001")
   cover_make.add_argument("--route", default="video-diary")
   cover_make.add_argument("--version", default="")
   cover_make.add_argument("--day-label", default="")
@@ -283,6 +530,7 @@ def build_parser() -> argparse.ArgumentParser:
   release_canary_adopt.add_argument("--date", required=True)
   release_canary_adopt.add_argument("--publish-package")
   release_canary_adopt.add_argument("--content-type", default="video-diary")
+  release_canary_adopt.add_argument("--sequence", default="001")
   release_canary_adopt.add_argument("--script")
   release_canary_adopt.add_argument("--recording")
   release_canary_adopt.add_argument("--actor", default="system-steward-agent")
@@ -324,6 +572,7 @@ def build_parser() -> argparse.ArgumentParser:
   run_start = run_subparsers.add_parser("start", help="Create or reuse one production run")
   run_start.add_argument("--date", required=True)
   run_start.add_argument("--content-type", default="video-diary")
+  run_start.add_argument("--sequence", default="001")
   run_start.add_argument("--id")
   run_start.add_argument("--title", default="")
   run_start.add_argument("--channel", choices=["stable", "candidate", "canary"], default="stable")
@@ -377,6 +626,7 @@ def build_parser() -> argparse.ArgumentParser:
   run_finalize_active.add_argument("--date", required=True)
   run_finalize_active.add_argument("--publish-package")
   run_finalize_active.add_argument("--content-type", default="video-diary")
+  run_finalize_active.add_argument("--sequence", default="001")
   run_finalize_active.add_argument("--script")
   run_finalize_active.add_argument("--recording")
   run_finalize_active.add_argument("--actor", default="video-agent")
@@ -400,15 +650,41 @@ def handle_observe(root: Path, args: argparse.Namespace) -> int:
     "evidence": evidence,
     "promoteRequested": args.promote,
     "deterministicFinding": args.deterministic,
+    "triage": {
+      "workflowStep": args.workflow_step,
+      "reproduction": args.reproduction,
+      "userImpact": args.user_impact,
+      "impactLevel": args.impact_level,
+      "priorityReason": args.priority_reason,
+      "proposedFix": args.proposed_fix,
+      "validationPlan": args.validation_plan,
+      "processGate": args.process_gate,
+      "reproducible": args.reproducible,
+      "blocking": args.blocking,
+      "causesRework": args.causes_rework,
+    },
   })
+  realtime = realtime_reconcile(
+    root,
+    observation["date"],
+    trigger="observe",
+    actor=observation["actor"],
+  )
+  result = {**observation, "realtime": realtime}
   if args.json:
-    print_json(json_envelope(root, observation))
+    print_json(json_envelope(root, result))
   else:
     print(f"observation_id={observation['id']}")
     print(f"date={observation['date']}")
     print(f"category={observation['category']}")
     print(f"priority={observation['priority']}")
     print("status=observed")
+    print(f"realtime_status={realtime['status']}")
+    if realtime.get("revision") is not None:
+      print(f"topk_revision={realtime['revision']}")
+    issue_sync = realtime.get("githubIssueSync", {})
+    if issue_sync:
+      print(f"github_issue_sync={issue_sync.get('status', 'unknown')}")
   return 0
 
 
@@ -458,6 +734,49 @@ def handle_context(root: Path, args: argparse.Namespace) -> int:
   return 0
 
 
+def print_cleanup_summary(data: Dict[str, Any]) -> None:
+  print(f"status={data.get('status', 'configured')}")
+  print(f"enabled={str(data['config']['enabled']).lower()}")
+  print(f"retention_days={data['config']['retentionDays']}")
+  if data.get("cutoffDate"):
+    print(f"cutoff_date={data['cutoffDate']}")
+  print(f"candidate_files={data.get('candidateCount', 0)}")
+  print(f"candidate_bytes={data.get('candidateBytes', 0)}")
+  print(f"deleted_files={len(data.get('deletedFiles', []))}")
+  print(f"deleted_bytes={data.get('deletedBytes', 0)}")
+  if data.get("reason"):
+    print(f"reason={data['reason']}")
+  if data.get("manifest"):
+    print(f"manifest={data['manifest']}")
+
+
+def handle_cleanup(root: Path, args: argparse.Namespace) -> int:
+  if args.cleanup_action == "configure":
+    config = configure_retention(
+      root,
+      enabled=args.enabled,
+      retention_days=args.days,
+    )
+    data = {"config": config, "status": "configured"}
+  elif args.cleanup_action == "status":
+    plan = build_retention_plan(root, args.date)
+    data = {**plan, "status": "planned", "mode": "dry-run"}
+  elif args.cleanup_action == "run":
+    data = run_retention(
+      root,
+      args.date,
+      apply=args.apply,
+      if_enabled=args.if_enabled,
+    )
+  else:
+    raise MediaRetentionError(f"Unknown cleanup action: {args.cleanup_action}")
+  if args.json:
+    print_json(json_envelope(root, data))
+  else:
+    print_cleanup_summary(data)
+  return 2 if data.get("status") == "partial-failure" else 0
+
+
 def handle_evolve(root: Path, args: argparse.Namespace) -> int:
   result = run_evolution(
     root,
@@ -466,6 +785,14 @@ def handle_evolve(root: Path, args: argparse.Namespace) -> int:
     actor=args.actor,
     reselect=args.reselect,
   )
+  realtime = realtime_reconcile(
+    root,
+    args.date,
+    trigger="evolve",
+    actor=args.actor,
+    evolution=result,
+  )
+  result = {**result, "realtime": realtime}
   if args.json:
     print_json(json_envelope(root, result))
   else:
@@ -480,6 +807,197 @@ def handle_evolve(root: Path, args: argparse.Namespace) -> int:
     print(f"state={result['statePath']}")
     print(f"reused={str(result['reused']).lower()}")
   return 0
+
+
+def handle_evolve_triage(root: Path, args: argparse.Namespace) -> int:
+  observation = record_candidate_triage(
+    root,
+    args.date,
+    args.candidate_id,
+    {
+      "workflowStep": args.workflow_step,
+      "reproduction": args.reproduction,
+      "userImpact": args.user_impact,
+      "impactLevel": args.impact_level,
+      "priorityReason": args.priority_reason,
+      "proposedFix": args.proposed_fix,
+      "validationPlan": args.validation_plan,
+      "processGate": args.process_gate,
+      "reproducible": args.reproducible,
+      "blocking": args.blocking,
+      "causesRework": args.causes_rework,
+    },
+    actor=args.actor,
+    evidence_note=args.evidence,
+  )
+  realtime = realtime_reconcile(
+    root,
+    observation["date"],
+    trigger="observe",
+    actor=observation["actor"],
+  )
+  result = {**observation, "candidateId": args.candidate_id, "realtime": realtime}
+  if args.json:
+    print_json(json_envelope(root, result))
+  else:
+    print(f"candidate_id={args.candidate_id}")
+    print(f"observation_id={observation['id']}")
+    print("counts_as_occurrence=false")
+    print(f"realtime_status={realtime['status']}")
+    print(
+      f"github_issue_sync="
+      f"{realtime.get('githubIssueSync', {}).get('status', 'disabled')}"
+    )
+  return 0
+
+
+def handle_evolve_complete(root: Path, args: argparse.Namespace) -> int:
+  result = complete_candidate(
+    root,
+    args.date,
+    args.candidate_id,
+    args.change_type,
+    evidence_paths=args.evidence,
+    artifact_paths=args.artifact,
+    actor=args.actor,
+    compatibility_impact=args.compatibility_impact,
+    requires_migration=args.requires_migration,
+    requires_canary=args.requires_canary,
+    process_action=args.process_action,
+    process_note=args.process_note,
+  )
+  realtime = realtime_reconcile(
+    root,
+    args.date,
+    trigger="complete",
+    actor=args.actor,
+  )
+  result = {**result, "realtime": realtime}
+  if args.json:
+    print_json(json_envelope(root, result))
+  else:
+    completion = result["completion"]
+    print(f"candidate_id={completion['candidateId']}")
+    print(f"status={completion['status']}")
+    print(f"change_type={completion['changeType']}")
+    print(f"recommended_semver={completion['recommendedSemVer']}")
+    print(f"process_action={completion.get('processAction', 'none')}")
+    print(f"completion_record={result['completionRecord']}")
+    print(f"reused={str(result['reused']).lower()}")
+    print(f"github_issue_sync={realtime.get('githubIssueSync', {}).get('status', 'disabled')}")
+  return 0
+
+
+def handle_evolve_issues(root: Path, args: argparse.Namespace) -> int:
+  if args.evolve_issue_action == "sync":
+    result = sync_topk_issues(
+      root,
+      args.date,
+      repository=args.repo,
+      dry_run=args.dry_run,
+      if_enabled=args.if_enabled,
+    )
+    if args.json:
+      print_json(json_envelope(root, result))
+    else:
+      print(f"date={result['date']}")
+      print(f"enabled={str(result['enabled']).lower()}")
+      print(f"skipped={str(result['skipped']).lower()}")
+      if result.get("repository"):
+        print(f"repository={result['repository']}")
+      if result.get("reason"):
+        print(f"reason={result['reason']}")
+      print(f"created={len(result['created'])}")
+      print(f"updated={len(result['updated'])}")
+      print(f"unchanged={len(result['unchanged'])}")
+      print(f"closed={len(result['closed'])}")
+      print(f"privacy_skipped={len(result['privacySkipped'])}")
+      print(f"privacy_redacted={len(result['privacyRedacted'])}")
+      for item in [*result["created"], *result["updated"]]:
+        print(
+          f"issue={item.get('number', '')}\t{item['candidateId']}\t"
+          f"{item['issueType']}\t{item['priority']}\t{item.get('url', '')}"
+        )
+    return 0
+
+  if args.evolve_issue_action == "check-pr":
+    result = check_pull_request_issue_gate(
+      GitHubClient(args.repo),
+      args.pr,
+      require_topk=args.require_topk,
+    )
+    if args.json:
+      print_json(json_envelope(root, result))
+    else:
+      print(f"valid={str(result['valid']).lower()}")
+      print(f"pull_number={result['pullNumber']}")
+      print(f"base_branch={result['baseBranch']}")
+      print(f"default_branch={result['defaultBranch']}")
+      print(f"checked_topk_issues={len(result['checkedTopKIssues'])}")
+      print(f"require_topk={str(result['requireTopK']).lower()}")
+      for violation in result["violations"]:
+        print(f"violation={violation}")
+    return 0 if result["valid"] else 2
+
+  if args.evolve_issue_action == "start":
+    repository = None
+    client = None
+    if not args.offline:
+      repository = resolve_repository(root, args.repo)
+      client = GitHubClient(repository)
+    result = build_issue_work_packet(
+      root,
+      args.date,
+      args.candidate_id,
+      repository=repository,
+      client=client,
+      offline=args.offline,
+    )
+    if repository:
+      result["repository"] = repository
+    if args.json:
+      print_json(json_envelope(root, result))
+    else:
+      print(f"candidate_id={result['candidateId']}")
+      print(f"priority={result['priority']}")
+      print(f"issue_number={result.get('issueNumber') or ''}")
+      print(f"branch_name={result['branchName']}")
+      print(f"recommended_change_type={result['recommendedChangeType']}")
+      print(f"github_status={result['githubStatus']}")
+      print(f"completion_command={result['completionCommand']}")
+      print("pr_body_start")
+      print(result["prBody"])
+      print("pr_body_end")
+    return 0
+
+  if args.evolve_issue_action == "merge":
+    client = GitHubClient(args.repo)
+    result = check_pull_request_merge_gate(client, args.pr)
+    if result["valid"] and args.apply:
+      result["merge"] = client.merge_pull_request(args.pr, auto=args.auto)
+    else:
+      result["merge"] = {
+        "applied": False,
+        "reason": "not-ready" if not result["valid"] else "dry-run",
+      }
+    if args.json:
+      print_json(json_envelope(root, result))
+    else:
+      print(f"valid={str(result['valid']).lower()}")
+      print(f"pull_number={result['pullNumber']}")
+      print(f"base_branch={result['baseBranch']}")
+      print(f"default_branch={result['defaultBranch']}")
+      print(f"checks={result['checks'].get('status', 'unknown')}")
+      print(f"checked_topk_issues={len(result['checkedTopKIssues'])}")
+      for violation in result["violations"]:
+        print(f"violation={violation}")
+      if result["merge"].get("output"):
+        print(f"merge_output={result['merge']['output']}")
+      else:
+        print(f"merge_action={result['merge'].get('reason', 'applied')}")
+    return 0 if result["valid"] else 2
+
+  raise GitHubIssueSyncError(f"Unknown evolve issues action: {args.evolve_issue_action}")
 
 
 def handle_system(root: Path, args: argparse.Namespace) -> int:
@@ -588,6 +1106,8 @@ def handle_cover(root: Path, args: argparse.Namespace) -> int:
       subtitle=args.subtitle,
       note=args.note,
       output_prefix=args.output_prefix,
+      content_type=args.content_type,
+      sequence=args.sequence,
     )
     if args.json:
       print_json(json_envelope(root, data))
@@ -782,6 +1302,7 @@ def handle_release_canary_adopt(root: Path, args: argparse.Namespace) -> int:
     script_path=args.script,
     recording_path=args.recording,
     actor=args.actor,
+    sequence=args.sequence,
   )
   validation = data["validation"]
   if args.json:
@@ -864,6 +1385,7 @@ def handle_run(root: Path, args: argparse.Namespace) -> int:
       run_id=args.id,
       channel=args.channel,
       actor=args.actor,
+      sequence=args.sequence,
     )
     if args.json:
       print_json(json_envelope(root, data))
@@ -957,6 +1479,7 @@ def handle_run(root: Path, args: argparse.Namespace) -> int:
       script_path=args.script,
       recording_path=args.recording,
       actor=args.actor,
+      sequence=args.sequence,
     )
     if args.json:
       print_json(json_envelope(root, data))
@@ -987,8 +1510,16 @@ def main(argv: Optional[list] = None) -> int:
       return handle_doctor(root, args)
     if args.command == "context":
       return handle_context(root, args)
+    if args.command == "cleanup":
+      return handle_cleanup(root, args)
     if args.command == "observe":
       return handle_observe(root, args)
+    if args.command == "evolve" and args.evolve_action == "triage":
+      return handle_evolve_triage(root, args)
+    if args.command == "evolve" and args.evolve_action == "complete":
+      return handle_evolve_complete(root, args)
+    if args.command == "evolve" and args.evolve_action == "issues":
+      return handle_evolve_issues(root, args)
     if args.command == "evolve":
       return handle_evolve(root, args)
     if args.command == "system" and args.system_action == "info":
@@ -1058,6 +1589,14 @@ def main(argv: Optional[list] = None) -> int:
     return 3
   except CoverWorkflowError as error:
     payload = error_envelope("COVER_WORKFLOW_ERROR", str(error))
+    print_json(payload)
+    return 3
+  except GitHubIssueSyncError as error:
+    payload = error_envelope("GITHUB_ISSUE_SYNC_ERROR", str(error))
+    print_json(payload)
+    return 3
+  except MediaRetentionError as error:
+    payload = error_envelope("MEDIA_RETENTION_ERROR", str(error))
     print_json(payload)
     return 3
   except (EvolutionError, RootDiscoveryError, OSError, json.JSONDecodeError) as error:

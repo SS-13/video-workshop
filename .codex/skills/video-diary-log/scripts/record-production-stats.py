@@ -7,10 +7,17 @@ import fcntl
 import json
 import re
 import subprocess
+import sys
 import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(PROJECT_ROOT / "09_tools"))
+
+from video_production_core.content_layout import ContentRef  # noqa: E402
 
 
 FIELDNAMES = [
@@ -149,12 +156,17 @@ def file_size_bytes(root: Path, file_path: str) -> str:
   return str(full_path.stat().st_size)
 
 
-def build_content_id(date: str, column: str, day_label: str, video_path: str) -> str:
+def build_content_id(
+  date: str,
+  column: str,
+  day_label: str,
+  video_path: str,
+  sequence: str = "001",
+) -> str:
   if day_label:
     return f"{date}_{day_label.replace(' ', '')}"
   if column and column != "video-diary":
-    stem = Path(video_path).stem if video_path else "001"
-    return f"{date}_{column}_{stem}"
+    return f"{date}_{column}_{int(sequence):03d}"
   return date
 
 
@@ -186,11 +198,11 @@ def upsert_row(path: Path, row: dict[str, str]) -> None:
   write_rows(path, ordered_rows)
 
 
-def update_daily_log(root: Path, row: dict[str, str]) -> None:
+def update_daily_log(root: Path, row: dict[str, str], sequence: str = "001") -> None:
   date = row["date"]
   if not date:
     return
-  log_path = root / "06_logs" / f"{date}.md"
+  log_path = ContentRef(date, row.get("column", "video-diary"), sequence).text_path(root, "06_logs")
   if not log_path.exists():
     return
   text = log_path.read_text(encoding="utf-8")
@@ -207,6 +219,7 @@ def main() -> None:
   parser = argparse.ArgumentParser(description="Record production duration and final video length.")
   parser.add_argument("--date", default="", help="YYYY-MM-DD")
   parser.add_argument("--column", default="video-diary")
+  parser.add_argument("--sequence", default="001")
   parser.add_argument("--day-label", default="")
   parser.add_argument("--title", default="")
   parser.add_argument("--video-path", required=True)
@@ -241,7 +254,9 @@ def main() -> None:
     raise SystemExit("Missing production time. Provide --total-minutes, --total-text, or start/finish times.")
 
   row = {
-    "content_id": build_content_id(date, args.column, args.day_label, args.video_path),
+    "content_id": build_content_id(
+      date, args.column, args.day_label, args.video_path, args.sequence
+    ),
     "date": date,
     "column": args.column,
     "day_label": args.day_label,
@@ -265,7 +280,7 @@ def main() -> None:
   for ledger_path in (state_ledger_path, legacy_ledger_path):
     with_file_lock(ledger_path.with_suffix(".lock"), lambda path=ledger_path: upsert_row(path, row))
   if args.update_daily_log:
-    update_daily_log(root, row)
+    update_daily_log(root, row, args.sequence)
 
   print(f"production_stats={state_ledger_path.relative_to(root)}")
   print(f"legacy_mirror={legacy_ledger_path.relative_to(root)}")

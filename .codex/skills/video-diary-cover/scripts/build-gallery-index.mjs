@@ -44,11 +44,11 @@ const parseTableRows = (text) => {
   return rows;
 };
 
-const readDateGallery = async (date) => {
-  const indexPath = path.join(SOURCE_ROOT, date, "INDEX.md");
+const readGallery = async (date, contentType, sequence) => {
+  const indexPath = path.join(SOURCE_ROOT, date, contentType, sequence, "INDEX.md");
   try {
     const text = await readFile(indexPath, "utf8");
-    return parseTableRows(text).map((row) => ({ date, ...row }));
+    return parseTableRows(text).map((row) => ({ date, contentType, sequence, ...row }));
   } catch (error) {
     if (error.code === "ENOENT") {
       return [];
@@ -64,7 +64,15 @@ const main = async () => {
 
   const rows = [];
   for (const date of dates) {
-    rows.push(...await readDateGallery(date));
+    const dateRoot = path.join(SOURCE_ROOT, date);
+    const contentTypes = await readdir(dateRoot, { withFileTypes: true });
+    for (const contentType of contentTypes.filter((entry) => entry.isDirectory())) {
+      const typeRoot = path.join(dateRoot, contentType.name);
+      const sequences = await readdir(typeRoot, { withFileTypes: true });
+      for (const sequence of sequences.filter((entry) => entry.isDirectory())) {
+        rows.push(...await readGallery(date, contentType.name, sequence.name));
+      }
+    }
   }
 
   const lines = [
@@ -72,14 +80,14 @@ const main = async () => {
     "",
     "This index is generated from `15_cover_gallery/` and is used by `video-diary-cover` as the cover design gallery.",
     "",
-    "| preview | date | version | route | style | title | note |",
-    "| --- | --- | --- | --- | --- | --- | --- |"
+    "| preview | date | content | item | version | route | style | title | note |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"
   ];
 
   for (const row of rows) {
-    const previewPath = `./${row.date}/${row.file}`;
+    const previewPath = `./${row.date}/${row.contentType}/${row.sequence}/${row.file}`;
     const note = [row.note, row.result].filter(Boolean).join(" / ");
-    lines.push(`| ![${row.date} ${row.version}](${previewPath}) | ${row.date} | ${row.version} | ${row.route} | ${row.styleVersion} | ${row.title} | ${note} |`);
+    lines.push(`| ![${row.date} ${row.version}](${previewPath}) | ${row.date} | ${row.contentType} | ${row.sequence} | ${row.version} | ${row.route} | ${row.styleVersion} | ${row.title} | ${note} |`);
   }
 
   await mkdir(path.dirname(OUTPUT_PATH), { recursive: true });

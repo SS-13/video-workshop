@@ -229,6 +229,7 @@ def main() -> None:
   parser.add_argument("--system-version", default="")
   parser.add_argument("--date", default="")
   parser.add_argument("--content-type", default="video-diary")
+  parser.add_argument("--sequence", default="001")
   parser.add_argument("--output-dir")
   args = parser.parse_args()
 
@@ -263,6 +264,8 @@ def main() -> None:
     "schemaVersion": 1,
     "runId": args.run_id,
     "contentId": args.content_id or args.run_id,
+    "contentType": args.content_type,
+    "sequence": f"{int(args.sequence):03d}",
     "platform": args.platform,
     "title": args.title.strip(),
     "description": args.description.strip(),
@@ -311,6 +314,7 @@ def main() -> None:
       date=content_date,
       publish_package_path=str(json_path),
       content_type=args.content_type,
+      sequence=args.sequence,
       actor="video-agent",
     )
   except RunStateError as error:
@@ -324,6 +328,8 @@ def main() -> None:
   print(f"active_run_changed={str(active_run['changed']).lower()}")
   if active_run.get("run"):
     print(f"active_run_id={active_run['run']['id']}")
+  if active_run.get("contentLedger"):
+    print(f"content_ledger_changed={str(active_run['contentLedger'].get('changed', False)).lower()}")
 
 
 if __name__ == "__main__":

@@ -6,6 +6,8 @@ import re
 import shutil
 import subprocess
 
+from workflow_state import content_media_dir
+
 
 FFMPEG_FULL = Path("/usr/local/opt/ffmpeg-full/bin/ffmpeg")
 FFPROBE_FULL = Path("/usr/local/opt/ffmpeg-full/bin/ffprobe")
@@ -397,8 +399,8 @@ def write_report(path, data):
   path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def default_input_srt(root, date):
-  subtitle_dir = root / "04_videos" / date / "subtitles"
+def default_input_srt(root, date, content_type="video-diary", sequence="001"):
+  subtitle_dir = content_media_dir(root, "04_videos", date, content_type, sequence) / "subtitles"
   candidates = [
     subtitle_dir / f"{date}_transcribed_corrected.srt",
     subtitle_dir / f"{date}_transcribed.srt",
@@ -412,6 +414,8 @@ def default_input_srt(root, date):
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("--date", required=True)
+  parser.add_argument("--content-type", "--column", dest="content_type", default="video-diary")
+  parser.add_argument("--sequence", default="001")
   parser.add_argument("--input-video")
   parser.add_argument("--input-srt")
   parser.add_argument("--output-video")
@@ -431,12 +435,15 @@ def main():
   args = parser.parse_args()
 
   root = Path.cwd()
-  input_srt = resolve_path(root, args.input_srt) if args.input_srt else default_input_srt(root, args.date)
+  workspace = content_media_dir(root, "04_videos", args.date, args.content_type, args.sequence)
+  input_srt = resolve_path(root, args.input_srt) if args.input_srt else default_input_srt(
+    root, args.date, args.content_type, args.sequence
+  )
   output_srt = resolve_path(root, args.output_srt) if args.output_srt else (
-    root / "04_videos" / args.date / "subtitles" / f"{args.date}_transcribed_no-fillers.srt"
+    workspace / "subtitles" / f"{args.date}_transcribed_no-fillers.srt"
   )
   report_path = resolve_path(root, args.report) if args.report else (
-    root / "04_videos" / args.date / "subtitles" / f"{args.date}_filler_removal_report.json"
+    workspace / "subtitles" / f"{args.date}_filler_removal_report.json"
   )
 
   blocks = parse_srt(input_srt)
@@ -455,7 +462,7 @@ def main():
   input_video = resolve_path(root, args.input_video) if args.input_video else None
   output_video = resolve_path(root, args.output_video) if args.output_video else None
   if input_video and not output_video:
-    output_video = root / "04_videos" / args.date / "preprocessed" / f"{input_video.stem}_no-fillers.mp4"
+    output_video = workspace / "preprocessed" / f"{input_video.stem}_no-fillers.mp4"
 
   report = {
     "date": args.date,

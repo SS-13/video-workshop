@@ -61,7 +61,7 @@ input compliance check, writes a script to `02_scripts/`, and stops.
 Put the original file in:
 
 ```text
-03_recordings/YYYY-MM-DD/
+03_recordings/YYYY-MM-DD/video-diary/001/
 ```
 
 The filename may remain unchanged. Tell the AI that the video is uploaded and
@@ -82,7 +82,7 @@ After the cover pair, external SRT, and insert plan are confirmed, the system
 runs compliance review and one final render. The export directory contains:
 
 ```text
-05_exports/YYYY-MM-DD/
+05_exports/YYYY-MM-DD/video-diary/001/
 ├── *_video-diary.mp4
 ├── *_cover_3x4.jpg
 ├── *_cover_4x3.jpg
@@ -101,7 +101,12 @@ Record a correction:
 python3 09_tools/vp.py observe \
   --summary "字幕整体偏快" \
   --category subtitle-rule \
-  --priority P1
+  --priority P1 \
+  --workflow-step subtitle-review \
+  --reproduction "复核后仍整体提前" \
+  --user-impact "需要整条返工校时" \
+  --reproducible \
+  --causes-rework
 ```
 
 When production is idle:
@@ -110,6 +115,7 @@ When production is idle:
 python3 09_tools/vp.py evolve --date YYYY-MM-DD
 ```
 
-The first daily TopK is locked at up to three items. Later observations stay in
-the backlog. The stable production path remains available while candidates are
-reviewed and tested.
+Observations stay local until they cross the Issue-readiness gate. Up to three
+unresolved Top-K Issues roll in real time; unfinished items carry across dates
+and are re-ranked. Verified completion releases a slot. The stable production
+path remains available while candidates are reviewed and tested.

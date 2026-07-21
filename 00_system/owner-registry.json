@@ -41,6 +41,23 @@
         "05_exports/<date>",
         "15_cover_gallery"
       ]
+    },
+    "media-retention": {
+      "agent": "system-steward-agent",
+      "skill": "video-diary-cleanup",
+      "commands": [
+        "vp cleanup status",
+        "vp cleanup configure",
+        "vp cleanup run"
+      ],
+      "writeScope": [
+        "00_state/workspace.json",
+        "00_state/media-retention-ledger.csv",
+        "03_recordings/<eligible-date>",
+        "04_videos/<eligible-date>",
+        "05_exports/<eligible-date>",
+        "06_logs/media-retention"
+      ]
     }
   }
 }

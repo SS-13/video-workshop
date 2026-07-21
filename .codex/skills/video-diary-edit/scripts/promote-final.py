@@ -6,6 +6,8 @@ import shutil
 import subprocess
 import sys
 
+from workflow_state import content_media_dir
+
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 LOG_SCRIPT = SCRIPT_DIR.parent.parent / "video-diary-log" / "scripts" / "record-production-stats.py"
@@ -23,12 +25,8 @@ def relative_to_root(root, path):
     return str(path)
 
 
-def export_dir(root, date, column, clip_id):
-  if column == "video-diary":
-    return root / "05_exports" / date
-  if not clip_id:
-    raise SystemExit("--clip-id is required for non-diary columns.")
-  return root / "05_exports" / column / clip_id
+def export_dir(root, date, content_type, sequence):
+  return content_media_dir(root, "05_exports", date, content_type, sequence)
 
 
 def default_name(date, day_label, column):
@@ -54,7 +52,8 @@ def main():
   parser.add_argument("--date", required=True, help="Content date, not production date.")
   parser.add_argument("--input", required=True, help="Edited MP4 in 04_videos or another explicit path.")
   parser.add_argument("--cover", default="")
-  parser.add_argument("--column", default="video-diary")
+  parser.add_argument("--content-type", "--column", dest="content_type", default="video-diary")
+  parser.add_argument("--sequence", default="001")
   parser.add_argument("--clip-id", default="")
   parser.add_argument("--day-label", default="")
   parser.add_argument("--title", default="")
@@ -72,8 +71,8 @@ def main():
   root = Path.cwd().resolve()
   source = resolve_path(root, args.input)
   cover = resolve_path(root, args.cover) if args.cover else None
-  target_dir = export_dir(root, args.date, args.column, args.clip_id)
-  target_name = args.output_name or default_name(args.date, args.day_label, args.column)
+  target_dir = export_dir(root, args.date, args.content_type, args.sequence)
+  target_name = args.output_name or default_name(args.date, args.day_label, args.content_type)
   target_video = target_dir / target_name
   target_cover = target_dir / cover.name if cover else None
 
@@ -83,7 +82,9 @@ def main():
     "--date",
     args.date,
     "--column",
-    args.column,
+    args.content_type,
+    "--sequence",
+    args.sequence,
     "--video-path",
     relative_to_root(root, target_video),
     "--title",

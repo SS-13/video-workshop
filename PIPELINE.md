@@ -66,6 +66,7 @@ version inspection  -> vp cover history
 | Source | `03_recordings/YYYY-MM-DD/<content-type>/<sequence>/*` | User, read-only to Agents |
 | Review | `04_videos/YYYY-MM-DD/<content-type>/<sequence>/REVIEW.md` | Video Agent |
 | Corrected subtitle | `04_videos/YYYY-MM-DD/<content-type>/<sequence>/subtitles/*_corrected.srt` | Video Agent |
+| Browser review inputs | `04_videos/YYYY-MM-DD/<content-type>/<sequence>/review/{video.mp4,subtitles.srt}` | Video Agent |
 | Covers | `05_exports/YYYY-MM-DD/<content-type>/<sequence>/*_cover_3x4.*`, `*_cover_4x3.*` | Video Agent |
 | Final video | `05_exports/YYYY-MM-DD/<content-type>/<sequence>/*.mp4` | Video Agent |
 | Publish copy | `PUBLISH.md`, `publish-package.json` | Video Agent + Compliance Agent |

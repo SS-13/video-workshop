@@ -206,6 +206,17 @@ npm run edit:render-day-v2 -- --date YYYY-MM-DD --model base --stop-after-review
 
 The recording is subtitle truth. The script is context only.
 
+The same command also creates a local browser-review folder next to `REVIEW.md`:
+
+```text
+04_videos/YYYY-MM-DD/video-diary/001/review/
+├── video.mp4       # relative link to the review video
+└── subtitles.srt   # relative link to the corrected external SRT
+```
+
+Choose these two files from the same folder in the browser subtitle tool. They
+are links, not copies, so this convenience entry does not duplicate video data.
+
 Then tell the local AI:
 
 ```text

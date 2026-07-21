@@ -103,6 +103,45 @@ class CoverGlyphQcTest(unittest.TestCase):
       self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
       self.assertTrue(json.loads(qc_path.read_text(encoding="utf-8"))["passed"])
 
+  def test_v131_adapts_explicit_mixed_title_lines_below_style_baseline(self):
+    from PIL import ImageFont
+
+    font = ImageFont.truetype(self.font_path(), 64)
+    if RENDER_COVER.missing_glyphs(font, "在WAIC，看见未来，也"):
+      self.skipTest("No installed CJK font can render the mixed Chinese title")
+
+    with tempfile.TemporaryDirectory() as directory:
+      root = Path(directory)
+      base = root / "base.jpg"
+      output = root / "cover.jpg"
+      qc_path = root / "qc.json"
+      Image.new("RGB", (1080, 1440), (30, 30, 30)).save(base)
+
+      result = subprocess.run(
+        [
+          sys.executable,
+          str(SCRIPT_PATH),
+          "--date", "2030-01-01",
+          "--style-version", "v1.3.1",
+          "--base-frame", str(base),
+          "--output", str(output),
+          "--title-line-1", "在WAIC，看见未来，也",
+          "--title-line-2", "看见好问题",
+          "--qc-output", str(qc_path),
+        ],
+        cwd=TOOLS_ROOT.parent,
+        text=True,
+        capture_output=True,
+        check=False,
+        env=self.run_environment(),
+      )
+
+      self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+      qc = json.loads(qc_path.read_text(encoding="utf-8"))
+      self.assertTrue(qc["passed"])
+      self.assertLess(qc["titleFontSizes"][0], 96)
+      self.assertLessEqual(qc["titleWidths"][0], 960)
+
 
 if __name__ == "__main__":
   unittest.main()

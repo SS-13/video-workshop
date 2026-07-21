@@ -56,7 +56,10 @@ is the fallback.
    - cover pair and cover QC;
    - preprocessing, real-audio transcription, correction, and subtitle QC.
 4. Produce one combined review pack with the 3:4 cover, 4:3 cover, corrected
-   external SRT, low-confidence segments, and insert plan.
+   external SRT, low-confidence segments, and insert plan. The pack also creates
+   `04_videos/YYYY-MM-DD/<content-type>/<sequence>/review/` with relative links
+   named `video.mp4` and `subtitles.srt`, so both browser review inputs are in
+   one folder without copying the video.
 5. Do not burn subtitles or apply unconfirmed inserts before the review gate.
 
 ### Export and publish package

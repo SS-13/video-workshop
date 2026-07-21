@@ -17,6 +17,8 @@ Subtitle timing is owned by the real audio transcript, not by visual taste. Do n
 
 The standard production order after upload is cover and SRT first, one combined review gate, then one final render. Make the cover and corrected external SRT in parallel. Build `04_videos/YYYY-MM-DD/<content-type>/<sequence>/REVIEW.md` and hand the cover pair, review video, external SRT, uncertain transcript segments, and insert plan to the user together. Do not burn subtitles until the combined review is confirmed.
 
+The review-pack command also creates `04_videos/YYYY-MM-DD/<content-type>/<sequence>/review/` with two relative links: `video.mp4` and `subtitles.srt`. Use that folder when a browser subtitle tool requires both inputs. The links point to the canonical working video and corrected SRT; do not copy or edit them in place.
+
 If the matching final cover has not been confirmed yet, full final rendering still waits. Minimal recording inspection, terminal-tail preprocessing, transcription, dictionary correction, and SRT timing checks may happen in parallel with cover work because they do not write the final MP4.
 
 The default `video-diary` engine is `v2`: tail scan once, extract/cache audio once, transcribe once with word timestamps and project vocabulary, correct/check SRT, stop at the combined review gate, then render once after confirmation. Each v2 job stores its source fingerprint, style versions, artifacts, and stage state in the matching `04_videos/YYYY-MM-DD/<content-type>/<sequence>/job.json`.

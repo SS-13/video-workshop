@@ -24,6 +24,7 @@ transcribe_module = load_module("transcribe", SCRIPT_DIR / "transcribe-recording
 render_v2_module = load_module("render_v2", SCRIPT_DIR / "render-day-v2.py")
 publish_module = load_module("publish_package", SCRIPT_DIR / "build-publish-package.py")
 correct_module = load_module("correct_transcript", SCRIPT_DIR / "correct-transcript.py")
+review_module = load_module("build_review_pack", SCRIPT_DIR / "build-review-pack.py")
 
 
 class WorkflowStateTest(unittest.TestCase):
@@ -48,6 +49,45 @@ class WorkflowStateTest(unittest.TestCase):
       self.assertIsNone(render_v2_module.optional_artifact_path(root, ""))
       self.assertIsNone(render_v2_module.optional_artifact_path(root, "."))
       self.assertEqual(render_v2_module.optional_artifact_path(root, artifact), artifact)
+
+  def test_review_assets_keep_video_and_subtitle_under_one_root_without_copying(self):
+    with tempfile.TemporaryDirectory() as directory:
+      root = Path(directory)
+      workspace = root / "04_videos" / "2026-07-21" / "video-diary" / "001"
+      video = workspace / "preprocessed" / "source_trimmed.mp4"
+      subtitle = workspace / "subtitles" / "2026-07-21_transcribed_corrected.srt"
+      video.parent.mkdir(parents=True)
+      subtitle.parent.mkdir(parents=True)
+      video.write_bytes(b"video")
+      subtitle.write_text("subtitle", encoding="utf-8")
+
+      assets = review_module.build_review_assets(root, workspace, video, subtitle)
+
+      self.assertEqual(assets["video"].resolve(), video.resolve())
+      self.assertEqual(assets["subtitle"].resolve(), subtitle.resolve())
+      self.assertTrue(assets["video"].is_symlink())
+      self.assertTrue(assets["subtitle"].is_symlink())
+      self.assertEqual(assets["directory"].name, "review")
+      self.assertEqual((assets["directory"] / "README.md").is_file(), True)
+      manifest = json.loads((assets["directory"] / "review-manifest.json").read_text(encoding="utf-8"))
+      self.assertEqual(manifest["video"], "video.mp4")
+      self.assertEqual(manifest["subtitle"], "subtitles.srt")
+
+  def test_review_assets_do_not_overwrite_real_files(self):
+    with tempfile.TemporaryDirectory() as directory:
+      root = Path(directory)
+      workspace = root / "workspace"
+      video = workspace / "source.mp4"
+      subtitle = workspace / "source.srt"
+      workspace.mkdir(parents=True)
+      video.write_bytes(b"video")
+      subtitle.write_text("subtitle", encoding="utf-8")
+      review_dir = workspace / "review"
+      review_dir.mkdir()
+      (review_dir / "video.mp4").write_bytes(b"user file")
+
+      with self.assertRaises(RuntimeError):
+        review_module.build_review_assets(root, workspace, video, subtitle)
 
 
 class SubtitleAlignmentTest(unittest.TestCase):

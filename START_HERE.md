@@ -76,6 +76,17 @@ The default v2 route:
 5. checks subtitle text and timing;
 6. returns one review pack before final rendering.
 
+The review pack includes a convenient local folder:
+
+```text
+04_videos/YYYY-MM-DD/video-diary/001/review/
+├── video.mp4
+└── subtitles.srt
+```
+
+Select both files from this folder when checking subtitles in a browser. The
+files are relative links to the canonical artifacts, not duplicate media.
+
 ## 5. Confirm Once, Then Export
 
 After the cover pair, external SRT, and insert plan are confirmed, the system

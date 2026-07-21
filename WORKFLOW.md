@@ -104,6 +104,8 @@ Create `04_videos/YYYY-MM-DD/<content-type>/<sequence>/REVIEW.md` containing:
 - 3:4 cover;
 - 4:3 cover;
 - corrected external SRT and preview input;
+- a `review/` folder containing relative links named `video.mp4` and
+  `subtitles.srt` for browser subtitle review;
 - low-confidence subtitle ranges;
 - text and timing QC results;
 - image/video insert plan, including exact time ranges and dimensions.

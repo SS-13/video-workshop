@@ -396,7 +396,8 @@ task. Top-K repair branches use `fix/topk-<candidate-id>`. A repair PR must targ
 `main`, be Ready for review, reference a verified Top-K Issue, and pass all required
 checks. `.github/workflows/topk-merge.yml` enables auto-merge only for same-repository
 Top-K repair branches and never executes PR branch code. After the PR reaches `main`,
-its trusted post-merge job closes only referenced Issues that still have both `topk`
+its trusted post-merge job (covering both PR-close and successful-test fallback paths)
+closes only referenced Issues that still have both `topk`
 and `status:verified`; Fork PRs, ordinary PRs, and unverified Issues are left alone.
 
 To inspect or compensate for one already merged repair PR, preview the post-merge

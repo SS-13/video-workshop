@@ -79,11 +79,15 @@ jobs:
 
   reconcile-merged-topk:
     if: >-
-      github.event_name == 'pull_request_target' &&
+      (github.event_name == 'pull_request_target' &&
       github.event.action == 'closed' &&
       github.event.pull_request.merged == true &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      startsWith(github.event.pull_request.head.ref, 'fix/topk-')
+      startsWith(github.event.pull_request.head.ref, 'fix/topk-')) ||
+      (github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.pull_requests[0].number != 0)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout trusted default branch
@@ -102,9 +106,35 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
+          pull_json="$(gh api "repos/${REPOSITORY}/pulls/${PR_NUMBER}")"
+          head_repo="$(jq -r '.head.repo.full_name // empty' <<<"${pull_json}")"
+          head_ref="$(jq -r '.head.ref // empty' <<<"${pull_json}")"
+          base_ref="$(jq -r '.base.ref // empty' <<<"${pull_json}")"
+
+          if [ "${head_repo}" != "${REPOSITORY}" ] || [[ "${head_ref}" != fix/topk-* ]] || [ "${base_ref}" != "${DEFAULT_BRANCH}" ]; then
+            echo "Not a same-repository Top-K repair targeting the default branch; nothing to reconcile."
+            exit 0
+          fi
+
+          merged="$(jq -r '.merged // false' <<<"${pull_json}")"
+          if [ "${merged}" != "true" ] && [ "${{ github.event_name }}" = "workflow_run" ]; then
+            for attempt in $(seq 1 24); do
+              sleep 5
+              pull_json="$(gh api "repos/${REPOSITORY}/pulls/${PR_NUMBER}")"
+              merged="$(jq -r '.merged // false' <<<"${pull_json}")"
+              [ "${merged}" = "true" ] && break
+            done
+          fi
+
+          if [ "${merged}" != "true" ]; then
+            echo "Top-K repair has not reached the default branch; leaving Issues open."
+            exit 0
+          fi
+
           python3 09_tools/vp.py evolve issues reconcile \
             --repo "${REPOSITORY}" \
             --pr "${PR_NUMBER}" \

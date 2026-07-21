@@ -462,7 +462,11 @@ def build_parser() -> argparse.ArgumentParser:
     help="Render and archive one approved daily cover pair",
   )
   cover_make.add_argument("--date", required=True)
-  cover_make.add_argument("--content-type", default="video-diary")
+  cover_make.add_argument(
+    "--content-type",
+    default=None,
+    help="Content directory key; defaults to the selected cover route",
+  )
   cover_make.add_argument("--sequence", default="001")
   cover_make.add_argument("--route", default="video-diary")
   cover_make.add_argument("--version", default="")

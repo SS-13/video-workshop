@@ -417,6 +417,81 @@ class CoverWorkflowTest(unittest.TestCase):
       self.assertTrue(result["archived"]["3x4"].endswith("v01_cover.jpg"))
       self.assertTrue(result["archived"]["4x3"].endswith("v02_cover.jpg"))
 
+  def test_cover_make_follows_route_when_content_type_is_omitted(self):
+    with tempfile.TemporaryDirectory() as directory:
+      root = Path(directory)
+      self.make_root(root)
+      routes_path = root / ".codex/skills/video-diary-cover/references/cover-routes.json"
+      routes = json.loads(routes_path.read_text(encoding="utf-8"))
+      routes["routes"]["reading-note"] = {
+        "defaultVersion": "v0.1",
+        "aliases": ["读书笔记", "reading-note"],
+        "versions": {
+          "v0.1": {"seriesLabel": "读书笔记", "titleMode": "book-title"},
+        },
+      }
+      routes_path.write_text(
+        json.dumps(routes, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+      )
+      portrait = root / "portrait.jpg"
+      landscape = root / "landscape.jpg"
+      self.make_image(portrait, (1080, 1440))
+      self.make_image(landscape, (1440, 1080))
+      calls = []
+      archive_count = 0
+
+      def fake_run(command, command_root):
+        nonlocal archive_count
+        calls.append(command)
+        script = Path(command[1]).name
+        content_type = (
+          command[command.index("--content-type") + 1]
+          if "--content-type" in command
+          else "video-diary"
+        )
+        if script == "render-cover-pair.py":
+          prefix = Path(command[command.index("--output-prefix") + 1])
+          self.make_image(prefix.parent / f"{prefix.name}_3x4.jpg", (1080, 1440))
+          self.make_image(prefix.parent / f"{prefix.name}_4x3.jpg", (1440, 1080))
+          manifest = (
+            command_root / "04_videos/2026-07-14" / content_type / "001" / "cover-qc"
+            / f"{prefix.name}_pair_manifest.json"
+          )
+          manifest.parent.mkdir(parents=True, exist_ok=True)
+          manifest.write_text("{}\n", encoding="utf-8")
+          stdout = "qc=pass\n"
+        elif script == "archive-cover.mjs":
+          archive_count += 1
+          stdout = f"cover=15_cover_gallery/2026-07-14/{content_type}/001/v0{archive_count}_cover.jpg\n"
+        else:
+          stdout = "gallery=15_cover_gallery/INDEX.md\n"
+        return subprocess.CompletedProcess(command, 0, stdout=stdout, stderr="")
+
+      with patch(
+        "video_production_core.cover_workflow.run_command",
+        side_effect=fake_run,
+      ):
+        result = make_cover_pair(
+          root=root,
+          date="2026-07-14",
+          portrait=portrait,
+          landscape=landscape,
+          route="reading-note",
+          title="Test book",
+        )
+
+      self.assertEqual(result["contentType"], "reading-note")
+      self.assertIn("05_exports/2026-07-14/reading-note/001/", result["covers"]["3x4"])
+      archive_commands = [
+        command for command in calls if Path(command[1]).name == "archive-cover.mjs"
+      ]
+      self.assertEqual(len(archive_commands), 2)
+      self.assertTrue(all(
+        command[command.index("--content-type") + 1] == "reading-note"
+        for command in archive_commands
+      ))
+
 
 class ControlPlaneRegistryTest(unittest.TestCase):
   def test_current_control_plane_is_valid(self):

@@ -268,7 +268,7 @@ def make_cover_pair(
   subtitle: str = "",
   note: str = "",
   output_prefix: Optional[str | Path] = None,
-  content_type: str = "video-diary",
+  content_type: Optional[str] = None,
   sequence: str = "001",
 ) -> Dict[str, Any]:
   root = root.resolve()
@@ -277,6 +277,7 @@ def make_cover_pair(
 
   _, routes = load_routes(root)
   route_name = normalize_route(routes, route)
+  resolved_content_type = content_type or route_name
   route_config = routes["routes"][route_name]
   style_version = version or route_config.get("defaultVersion", "")
   if style_version not in route_config.get("versions", {}):
@@ -287,7 +288,9 @@ def make_cover_pair(
   prefix = (
     resolve_path(root, output_prefix)
     if output_prefix
-    else default_output_prefix(root, date, route_name, day_label, content_type, sequence)
+    else default_output_prefix(
+      root, date, route_name, day_label, resolved_content_type, sequence
+    )
   )
   prefix.parent.mkdir(parents=True, exist_ok=True)
 
@@ -298,7 +301,7 @@ def make_cover_pair(
     "--date",
     date,
     "--content-type",
-    content_type,
+    resolved_content_type,
     "--sequence",
     sequence,
     "--route",
@@ -326,7 +329,9 @@ def make_cover_pair(
 
   output_3x4 = prefix.parent / f"{prefix.name}_3x4.jpg"
   output_4x3 = prefix.parent / f"{prefix.name}_4x3.jpg"
-  manifest_path = ContentRef(date, content_type, sequence).media_dir(root, "04_videos") / "cover-qc" / f"{prefix.name}_pair_manifest.json"
+  manifest_path = ContentRef(
+    date, resolved_content_type, sequence
+  ).media_dir(root, "04_videos") / "cover-qc" / f"{prefix.name}_pair_manifest.json"
   for path in [output_3x4, output_4x3]:
     if not path.is_file():
       raise CoverWorkflowError(f"Cover renderer did not create: {path}")
@@ -343,7 +348,7 @@ def make_cover_pair(
       str(archive_script),
       date,
       "--content-type",
-      content_type,
+      resolved_content_type,
       "--sequence",
       sequence,
       "--source",
@@ -366,8 +371,8 @@ def make_cover_pair(
 
   return {
     "date": date,
-    "contentType": content_type,
-    "sequence": ContentRef(date, content_type, sequence).sequence,
+    "contentType": resolved_content_type,
+    "sequence": ContentRef(date, resolved_content_type, sequence).sequence,
     "route": route_name,
     "styleVersion": style_version,
     "covers": {

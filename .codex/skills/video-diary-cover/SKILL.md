@@ -76,6 +76,10 @@ The route default version is used unless `--version` is explicit. The command
 writes both exports, QC and pair manifest, updates `job.json`, archives both
 daily revisions, and rebuilds the local gallery.
 
+When `--content-type` is omitted, the output directory follows `--route`.
+Pass `--content-type` explicitly only when the content directory intentionally
+differs from the selected cover route.
+
 ### 3. History
 
 Inspect style versions and recent daily revisions:

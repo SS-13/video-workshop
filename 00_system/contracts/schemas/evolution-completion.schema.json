@@ -23,6 +23,8 @@
           "artifacts",
           "releaseCandidate",
           "releaseTarget",
+          "versionDecision",
+          "versionPlanBase",
           "changeType",
           "recommendedSemVer",
           "compatibilityImpact",
@@ -48,6 +50,21 @@
           },
           "releaseCandidate": {"type": "boolean"},
           "releaseTarget": {"type": ["string", "null"]},
+          "versionDecision": {
+            "type": "string",
+            "enum": [
+              "historical-base",
+              "historical-user-confirmed",
+              "automatic-bump",
+              "automatic-disabled",
+              "user-confirmation-required",
+              "manual-review-required"
+            ]
+          },
+          "versionPlanBase": {
+            "type": "string",
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+          },
           "changeType": {
             "type": "string",
             "enum": ["bugfix", "feature", "major-evolution"]

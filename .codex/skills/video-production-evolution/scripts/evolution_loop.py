@@ -10,9 +10,17 @@ import hashlib
 import json
 import os
 import re
+import sys
 import tempfile
 import unicodedata
 import uuid
+
+
+CORE_TOOLS_DIR = Path(__file__).resolve().parents[4] / "09_tools"
+if str(CORE_TOOLS_DIR) not in sys.path:
+  sys.path.insert(0, str(CORE_TOOLS_DIR))
+
+from video_production_core.versioning import apply_version_plan  # noqa: E402
 
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -452,10 +460,12 @@ def effective_priority(
   return str(order[effective_rank]), age_days, max(0, original_rank - effective_rank)
 
 
-def carried_backlog_ids(root: Path, target_date: str, lookback_days: int) -> set[str]:
+def _nearest_successful_snapshot(
+  root: Path,
+  target_date: str,
+  lookback_days: int,
+) -> Optional[Dict[str, Any]]:
   target = date_type.fromisoformat(target_date)
-  carried = set()
-  decided = set()
   for offset in range(1, lookback_days):
     state_path = root / "00_state" / "evolution" / f"{target - timedelta(days=offset)}.json"
     if not state_path.is_file():
@@ -464,15 +474,198 @@ def carried_backlog_ids(root: Path, target_date: str, lookback_days: int) -> set
       state = load_json(state_path)
     except (OSError, json.JSONDecodeError):
       continue
-    for item in [*state.get("topK", []), *state.get("backlog", [])]:
-      candidate_id = str(item.get("id", ""))
-      if candidate_id and candidate_id not in decided:
-        carried.add(candidate_id)
-        decided.add(candidate_id)
+    if not isinstance(state, dict):
+      continue
+    if not isinstance(state.get("topK"), list) or not isinstance(state.get("backlog"), list):
+      continue
     # The nearest successful snapshot is the unresolved queue source of truth.
     # Older snapshots are audit history and must not resurrect retired work.
-    break
+    return state
+  return None
+
+
+def carried_candidates(
+  root: Path,
+  target_date: str,
+  lookback_days: int,
+  excluded_ids: Optional[set[str]] = None,
+) -> List[Dict[str, Any]]:
+  snapshot = _nearest_successful_snapshot(root, target_date, lookback_days)
+  if snapshot is None:
+    return []
+  excluded = excluded_ids or set()
+  carried: List[Dict[str, Any]] = []
+  seen = set()
+  for item in [*snapshot.get("topK", []), *snapshot.get("backlog", [])]:
+    if not isinstance(item, dict):
+      continue
+    candidate_id = str(item.get("id", "")).strip()
+    if not candidate_id or candidate_id in seen or candidate_id in excluded:
+      continue
+    carried.append(dict(item))
+    seen.add(candidate_id)
   return carried
+
+
+def carried_backlog_ids(root: Path, target_date: str, lookback_days: int) -> set[str]:
+  return {
+    str(item.get("id"))
+    for item in carried_candidates(root, target_date, lookback_days)
+    if item.get("id")
+  }
+
+
+def candidate_rank_score(item: Dict[str, Any], policy: Dict[str, Any]) -> int:
+  priority = str(item.get("priority", "P2"))
+  triage = item.get("triage", {}) if isinstance(item.get("triage", {}), dict) else {}
+  impact_level = str(triage.get("impactLevel", "unknown"))
+  if impact_level not in VALID_IMPACT_LEVELS:
+    impact_level = "unknown"
+  base_score = (len(policy.get("priorityOrder", VALID_PRIORITIES)) - priority_rank(priority, policy)) * 100
+  score = base_score
+  score += 40 if item.get("promoteRequested", False) else 0
+  score += 30 if item.get("deterministicFinding", False) else 0
+  score += 35 if triage.get("reproducible", False) else 0
+  score += 45 if triage.get("blocking", False) else 0
+  score += 25 if triage.get("causesRework", False) else 0
+  score += {"unknown": 0, "low": 5, "medium": 15, "high": 30, "critical": 45}[impact_level]
+  score += min(int(item.get("occurrenceCount", 0)), 20) * 5
+  score += min(int(item.get("todayCount", 0)), 10)
+  return score
+
+
+def refresh_carried_candidate(
+  item: Dict[str, Any],
+  target_date: str,
+  policy: Dict[str, Any],
+) -> Dict[str, Any]:
+  refreshed = dict(item)
+  original_priority = str(
+    refreshed.get("originalPriority", refreshed.get("priority", "P2"))
+  ).upper()
+  if original_priority not in VALID_PRIORITIES:
+    original_priority = "P2"
+  first_seen_at = str(
+    refreshed.get("firstSeenAt") or refreshed.get("lastSeenAt") or f"{target_date}T00:00:00+08:00"
+  )
+  priority, age_days, priority_raised_by = effective_priority(
+    original_priority,
+    first_seen_at,
+    target_date,
+    policy,
+  )
+  refreshed["originalPriority"] = original_priority
+  refreshed["priority"] = priority
+  refreshed["firstSeenAt"] = first_seen_at
+  refreshed.setdefault("lastSeenAt", first_seen_at)
+  refreshed.setdefault("fingerprint", "")
+  refreshed.setdefault("summary", "")
+  refreshed.setdefault("category", "uncategorized")
+  refreshed.setdefault("scope", "system-core")
+  refreshed.setdefault("affectedComponent", "general")
+  refreshed.setdefault("occurrenceCount", 0)
+  refreshed.setdefault("contentIds", [])
+  refreshed.setdefault("observationIds", [])
+  refreshed.setdefault("eligibilityReasons", [])
+  refreshed.setdefault("promoteRequested", False)
+  refreshed.setdefault("deterministicFinding", False)
+  refreshed["ageDays"] = age_days
+  refreshed["priorityRaisedBy"] = priority_raised_by
+  refreshed["eligible"] = bool(refreshed.get("eligible", False))
+  refreshed["triage"] = (
+    refreshed.get("triage", {})
+    if isinstance(refreshed.get("triage", {}), dict)
+    else {}
+  )
+  refreshed["todayCount"] = 0
+  refreshed["selectedTopK"] = False
+  refreshed["status"] = "candidate" if refreshed.get("eligible", False) else "needs-evidence"
+  refreshed["rankScore"] = candidate_rank_score(refreshed, policy)
+  return refreshed
+
+
+def merge_carried_candidate(
+  carried: Dict[str, Any],
+  current: Dict[str, Any],
+  observations: List[Dict[str, Any]],
+  target_date: str,
+  policy: Dict[str, Any],
+) -> Dict[str, Any]:
+  candidate_id = str(carried.get("id", ""))
+  previous_observation_ids = {
+    str(value) for value in carried.get("observationIds", []) if str(value).strip()
+  }
+  current_observations = [
+    observation for observation in observations
+    if observation_fingerprint(observation) == current.get("fingerprint")
+  ]
+  new_occurrences = sum(
+    1
+    for observation in current_observations
+    if observation.get("countsAsOccurrence", True)
+    and observation.get("id") not in previous_observation_ids
+  )
+  merged = {**carried, **current}
+  carried_first_seen = str(carried.get("firstSeenAt", ""))
+  current_first_seen = str(current.get("firstSeenAt", ""))
+  first_seen_at = min(
+    [value for value in (carried_first_seen, current_first_seen) if value],
+    key=timestamp_value,
+    default=f"{target_date}T00:00:00+08:00",
+  )
+  last_seen_at = max(
+    [value for value in (str(carried.get("lastSeenAt", "")), str(current.get("lastSeenAt", ""))) if value],
+    key=timestamp_value,
+    default=first_seen_at,
+  )
+  original_priority = min(
+    [
+      str(carried.get("originalPriority", carried.get("priority", "P2"))).upper(),
+      str(current.get("originalPriority", current.get("priority", "P2"))).upper(),
+    ],
+    key=lambda priority: priority_rank(priority if priority in VALID_PRIORITIES else "P2", policy),
+  )
+  carried_triage = carried.get("triage", {}) if isinstance(carried.get("triage", {}), dict) else {}
+  current_triage = current.get("triage", {}) if isinstance(current.get("triage", {}), dict) else {}
+  impact_levels = [
+    str(value) for value in (carried_triage.get("impactLevel", "unknown"), current_triage.get("impactLevel", "unknown"))
+    if str(value) in VALID_IMPACT_LEVELS
+  ]
+  merged_triage = dict(carried_triage)
+  merged_triage.update({key: value for key, value in current_triage.items() if value not in ("", None)})
+  merged_triage["impactLevel"] = max(
+    impact_levels or ["unknown"],
+    key=VALID_IMPACT_LEVELS.index,
+  )
+  for key in ("reproducible", "blocking", "causesRework"):
+    merged_triage[key] = bool(carried_triage.get(key, False) or current_triage.get(key, False))
+  merged["id"] = candidate_id
+  merged["firstSeenAt"] = first_seen_at
+  merged["lastSeenAt"] = last_seen_at
+  merged["originalPriority"] = original_priority
+  merged["contentIds"] = sorted({
+    str(value) for value in [*carried.get("contentIds", []), *current.get("contentIds", [])]
+    if str(value).strip()
+  })
+  merged["observationIds"] = sorted({
+    str(value) for value in [*carried.get("observationIds", []), *current.get("observationIds", [])]
+    if str(value).strip()
+  })
+  merged["occurrenceCount"] = int(carried.get("occurrenceCount", 0)) + new_occurrences
+  merged["todayCount"] = int(current.get("todayCount", 0))
+  merged["promoteRequested"] = bool(
+    carried.get("promoteRequested", False) or current.get("promoteRequested", False)
+  )
+  merged["deterministicFinding"] = bool(
+    carried.get("deterministicFinding", False) or current.get("deterministicFinding", False)
+  )
+  merged["eligible"] = bool(carried.get("eligible", False) or current.get("eligible", False))
+  merged["eligibilityReasons"] = list(dict.fromkeys([
+    *carried.get("eligibilityReasons", []),
+    *current.get("eligibilityReasons", []),
+  ]))
+  merged["triage"] = merged_triage
+  return refresh_carried_candidate(merged, target_date, policy)
 
 
 def group_updates(
@@ -480,6 +673,7 @@ def group_updates(
   target_date: str,
   policy: Dict[str, Any],
   carry_forward_ids: Optional[set[str]] = None,
+  carry_forward_candidates: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
   grouped: Dict[str, List[Dict[str, Any]]] = {}
   for observation in observations:
@@ -487,13 +681,19 @@ def group_updates(
     grouped.setdefault(fingerprint, []).append(observation)
 
   updates: List[Dict[str, Any]] = []
+  carried_by_id = {
+    str(item.get("id")): item
+    for item in (carry_forward_candidates or [])
+    if item.get("id")
+  }
+  carried_ids = set(carried_by_id)
   repeat_threshold = int(policy["repeatThreshold"])
   rules = policy.get("candidateRules", {})
   for fingerprint, items in grouped.items():
     candidate_id = f"CAND-{fingerprint[:12]}"
     today_items = [item for item in items if item["date"] == target_date]
     occurrence_items = [item for item in items if item.get("countsAsOccurrence", True)]
-    if not today_items and candidate_id not in (carry_forward_ids or set()):
+    if not today_items and candidate_id not in (carry_forward_ids or set()) and candidate_id not in carried_ids:
       continue
     ordered = sorted(items, key=lambda item: (timestamp_value(item["createdAt"]), item["id"]))
     latest = ordered[-1]
@@ -589,6 +789,26 @@ def group_updates(
       "rankScore": score,
       "status": "candidate" if eligible else "needs-evidence",
     })
+
+  if carried_by_id:
+    updates_by_id = {item["id"]: item for item in updates}
+    for candidate_id, carried in carried_by_id.items():
+      current = updates_by_id.get(candidate_id)
+      if current is None:
+        updates_by_id[candidate_id] = refresh_carried_candidate(
+          carried,
+          target_date,
+          policy,
+        )
+      else:
+        updates_by_id[candidate_id] = merge_carried_candidate(
+          carried,
+          current,
+          observations,
+          target_date,
+          policy,
+        )
+    updates = list(updates_by_id.values())
   return updates
 
 
@@ -721,8 +941,8 @@ def build_report(state: Dict[str, Any]) -> str:
   lines.extend(["", "## 已完成候选", ""])
   if completed_items:
     lines.extend([
-      "| Status | Candidate | Completed at | Type | Release | Summary |",
-      "| --- | --- | --- | --- | --- | --- |",
+      "| Status | Candidate | Completed at | Type | Recommended | Release target | Summary |",
+      "| --- | --- | --- | --- | --- | --- | --- |",
     ])
     for item in completed_items:
       lines.append(
@@ -730,6 +950,7 @@ def build_report(state: Dict[str, Any]) -> str:
         f"{markdown_cell(item.get('completedAt', ''))} | "
         f"{markdown_cell(item.get('changeType', ''))} | "
         f"{markdown_cell(item.get('recommendedSemVer', ''))} | "
+        f"{markdown_cell(item.get('releaseTarget', 'pending'))} | "
         f"{markdown_cell(item.get('summary', ''))} |"
       )
   else:
@@ -932,6 +1153,13 @@ def complete_candidate(
       ledger["updatedAt"] = completed_at
       atomic_write_json(ledger_path, ledger)
 
+  version_plan = apply_version_plan(root)
+  ledger_after_versioning = load_json(ledger_path)
+  entry = next(
+    item for item in ledger_after_versioning.get("completed", [])
+    if item.get("candidateId") == candidate_id
+  )
+
   evolution = run_evolution(root, target_date, actor=actor)
   completed_item = next(
     (item for item in evolution.get("topK", []) if item.get("id") == candidate_id),
@@ -949,6 +1177,12 @@ def complete_candidate(
     "reportPath": evolution["reportPath"],
     "topKChanges": evolution.get("topKChanges", {}),
     "reused": reused,
+    "versionPlan": {
+      "releaseTarget": entry.get("releaseTarget"),
+      "versionDecision": entry.get("versionDecision", ""),
+      "lastPlannedVersion": version_plan.get("lastPlannedVersion"),
+      "pendingMajorCount": len(version_plan.get("pendingMajor", [])),
+    },
   }
 
 
@@ -1106,12 +1340,18 @@ def run_evolution(
     ):
       frozen_top_k = existing.get("topK", [])
 
-    carry_ids = (
-      carried_backlog_ids(root, target_date, int(policy["lookbackDays"]))
-      if policy.get("selection", {}).get("carryForwardBacklog", True)
-      else set()
-    )
     completed_candidates = load_completed_candidates(root)
+    carry_candidates = (
+      carried_candidates(
+        root,
+        target_date,
+        int(policy["lookbackDays"]),
+        excluded_ids=set(completed_candidates),
+      )
+      if policy.get("selection", {}).get("carryForwardBacklog", True)
+      else []
+    )
+    carry_ids = {str(item.get("id")) for item in carry_candidates if item.get("id")}
     completed_items = sorted(
       [
         {
@@ -1120,6 +1360,8 @@ def run_evolution(
           "completedAt": item.get("completedAt", ""),
           "changeType": item.get("changeType", ""),
           "recommendedSemVer": item.get("recommendedSemVer", ""),
+          "releaseTarget": item.get("releaseTarget"),
+          "versionDecision": item.get("versionDecision", ""),
           "completionRecord": item.get("completionRecord", ""),
         }
         for item in completed_candidates.values()
@@ -1135,6 +1377,7 @@ def run_evolution(
       target_date,
       policy,
       carry_forward_ids=carry_ids,
+      carry_forward_candidates=carry_candidates,
     )
     frozen_ids = {
       str(item.get("id", ""))
@@ -1174,11 +1417,14 @@ def run_evolution(
       "systemVersion": system_version(root),
       "observations": observations,
       "carriedCandidateIds": sorted(carry_ids),
+      "carriedCandidates": sorted(carry_candidates, key=lambda item: str(item.get("id", ""))),
       "completed": [
         {
           "candidateId": item["candidateId"],
           "completedAt": item.get("completedAt"),
           "changeType": item.get("changeType"),
+          "releaseTarget": item.get("releaseTarget"),
+          "versionDecision": item.get("versionDecision", ""),
         }
         for item in sorted(
           completed_candidates.values(),

@@ -19,6 +19,8 @@
       ],
       "releaseCandidate": true,
       "releaseTarget": null,
+      "versionDecision": "automatic-bump",
+      "versionPlanBase": "3.0.0",
       "changeType": "feature",
       "recommendedSemVer": "minor",
       "compatibilityImpact": "backward-compatible-feature",

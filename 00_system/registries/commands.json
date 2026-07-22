@@ -12,6 +12,8 @@
     "release:canary-adopt": {"owner": "video-production-release", "command": "python3 09_tools/vp.py release canary-adopt"},
     "run:finalize-active": {"owner": "video-production-release", "command": "python3 09_tools/vp.py run finalize-active"},
     "release:status": {"owner": "video-production-release", "command": "python3 09_tools/vp.py release status"},
+    "release:version-plan": {"owner": "video-production-evolution", "command": "python3 09_tools/vp.py release version-plan"},
+    "release:version-backfill": {"owner": "video-production-evolution", "command": "python3 09_tools/vp.py release version-backfill --apply"},
     "release:readiness": {"owner": "video-production-release", "command": "python3 09_tools/vp.py release readiness"},
     "release:activate": {"owner": "video-production-release", "command": "python3 09_tools/vp.py release activate"},
     "release:rollback": {"owner": "video-production-release", "command": "python3 09_tools/vp.py release rollback"},

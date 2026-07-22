@@ -38,11 +38,11 @@ class EvolutionLoopTest(unittest.TestCase):
   def tearDown(self):
     self.temp.cleanup()
 
-  def write_policy(self, top_k=3, mode="rolling"):
+  def write_policy(self, top_k=3, mode="rolling", lookback_days=7):
     policy = {
       "schemaVersion": 1,
       "topK": top_k,
-      "lookbackDays": 7,
+      "lookbackDays": lookback_days,
       "repeatThreshold": 2,
       "priorityOrder": ["P0", "P1", "P2", "P3"],
       "candidateRules": {
@@ -184,7 +184,9 @@ class EvolutionLoopTest(unittest.TestCase):
     self.assertEqual(rerun["summary"]["completedCandidateCount"], 1)
     self.assertIn(candidate_id, completed["topKChanges"]["exited"])
     self.assertTrue(ledger["completed"][0]["releaseCandidate"])
-    self.assertIsNone(ledger["completed"][0]["releaseTarget"])
+    self.assertEqual(ledger["completed"][0]["releaseTarget"], "2.2.0")
+    self.assertEqual(ledger["completed"][0]["versionDecision"], "automatic-bump")
+    self.assertEqual(ledger["completed"][0]["versionPlanBase"], "2.1.0")
     self.assertEqual(ledger["completed"][0]["recommendedSemVer"], "minor")
     self.assertTrue(ledger["completed"][0]["requiresCanary"])
     self.assertEqual(ledger["completed"][0]["processAction"], "test")
@@ -351,6 +353,67 @@ class EvolutionLoopTest(unittest.TestCase):
     self.assertEqual(second["topK"][0]["priority"], "P1")
     self.assertEqual(second["topK"][0]["ageDays"], 1)
     self.assertEqual(second["topK"][0]["priorityRaisedBy"], 1)
+
+  def test_active_candidate_is_carried_after_observation_leaves_lookback_window(self):
+    first_date = "2026-07-10"
+    carry_date = "2026-07-11"
+    target_date = "2026-07-12"
+    self.write_policy(top_k=1, lookback_days=2)
+    self.append_observations(first_date, [{
+      "summary": "窗口外仍未完成的活动事项",
+      "priority": "P1",
+      "promoteRequested": True,
+    }])
+
+    first = run_evolution(self.root, first_date)
+    carried_snapshot = run_evolution(self.root, carry_date)
+    self.assertEqual(carried_snapshot["topK"][0]["id"], first["topK"][0]["id"])
+    self.append_observations(target_date, [{
+      "summary": "今日更高优先级事项",
+      "priority": "P0",
+      "promoteRequested": True,
+    }])
+
+    result = run_evolution(self.root, target_date)
+
+    self.assertEqual(result["topK"][0]["summary"], "今日更高优先级事项")
+    carried = next(
+      item for item in result["backlog"]
+      if item["id"] == first["topK"][0]["id"]
+    )
+    self.assertEqual(carried["summary"], "窗口外仍未完成的活动事项")
+    self.assertEqual(carried["firstSeenAt"], f"{first_date}T12:01:00+08:00")
+    self.assertEqual(carried["ageDays"], 2)
+    self.assertEqual(carried["status"], "parked-topk")
+
+  def test_completed_candidate_is_excluded_from_carried_snapshot(self):
+    first_date = "2026-07-10"
+    carry_date = "2026-07-11"
+    target_date = "2026-07-12"
+    self.write_policy(top_k=1, lookback_days=2)
+    self.append_observations(first_date, [{
+      "summary": "完成后不应复活的事项",
+      "priority": "P0",
+      "promoteRequested": True,
+    }])
+
+    first = run_evolution(self.root, first_date)
+    evidence = self.root / "carried-completion-evidence.txt"
+    evidence.write_text("passed\n", encoding="utf-8")
+    complete_candidate(
+      self.root,
+      first_date,
+      first["topK"][0]["id"],
+      "bugfix",
+      [str(evidence)],
+      actor="test",
+    )
+    run_evolution(self.root, carry_date)
+    result = run_evolution(self.root, target_date)
+
+    candidate_id = first["topK"][0]["id"]
+    self.assertNotIn(candidate_id, [item["id"] for item in result["topK"]])
+    self.assertNotIn(candidate_id, [item["id"] for item in result["backlog"]])
 
   def test_p0_ties_are_sorted_oldest_first(self):
     target = "2026-07-13"

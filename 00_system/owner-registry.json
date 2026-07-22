@@ -4,10 +4,16 @@
     "evolution-loop": {
       "agent": "system-steward-agent",
       "skill": "video-production-evolution",
-      "commands": ["vp observe", "vp evolve"],
+      "commands": [
+        "vp observe",
+        "vp evolve",
+        "vp release version-plan",
+        "vp release version-backfill"
+      ],
       "writeScope": [
         "00_state/observations",
         "00_state/evolution",
+        "00_state/evolution/completed",
         "00_state/locks",
         "17_reports/evolution"
       ]

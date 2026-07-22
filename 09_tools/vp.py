@@ -78,6 +78,11 @@ from video_production_core.run_store import (  # noqa: E402
   start_run,
   validate_run,
 )
+from video_production_core.versioning import (  # noqa: E402
+  VersioningError,
+  apply_version_plan,
+  build_version_plan,
+)
 from evolution_loop import (  # noqa: E402
   VALID_CHANGE_TYPES,
   VALID_IMPACT_LEVELS,
@@ -492,6 +497,21 @@ def build_parser() -> argparse.ArgumentParser:
   release_subparsers = release.add_subparsers(dest="release_action", required=True)
   release_status = release_subparsers.add_parser("status", help="Show stable and candidate releases")
   add_common_json_flag(release_status)
+  release_version_plan = release_subparsers.add_parser(
+    "version-plan",
+    help="Show the automatic SemVer plan for completed evolution work",
+  )
+  add_common_json_flag(release_version_plan)
+  release_version_backfill = release_subparsers.add_parser(
+    "version-backfill",
+    help="Backfill release targets into completed evolution ledgers",
+  )
+  release_version_backfill.add_argument(
+    "--apply",
+    action="store_true",
+    help="Write the calculated targets into local completion ledgers",
+  )
+  add_common_json_flag(release_version_backfill)
   transcript_check = release_subparsers.add_parser(
     "transcript-check",
     help="Compare a candidate SRT with a reviewed golden SRT",
@@ -898,6 +918,8 @@ def handle_evolve_complete(root: Path, args: argparse.Namespace) -> int:
     print(f"status={completion['status']}")
     print(f"change_type={completion['changeType']}")
     print(f"recommended_semver={completion['recommendedSemVer']}")
+    print(f"release_target={completion.get('releaseTarget') or ''}")
+    print(f"version_decision={completion.get('versionDecision', '')}")
     print(f"process_action={completion.get('processAction', 'none')}")
     print(f"completion_record={result['completionRecord']}")
     print(f"reused={str(result['reused']).lower()}")
@@ -1193,6 +1215,44 @@ def handle_release(root: Path, args: argparse.Namespace) -> int:
     print(f"target_date={data['targetDate']}")
     manifest = data.get("candidateManifest") or {}
     print(f"candidate_status={manifest.get('status', '')}")
+    plan = data.get("versionPlan") or {}
+    print(f"version_base={plan.get('baseVersion', '')}")
+    print(f"last_planned_version={plan.get('lastPlannedVersion', '')}")
+    print(f"next_bugfix_version={plan.get('nextBugfixVersion', '')}")
+    print(f"next_feature_version={plan.get('nextFeatureVersion', '')}")
+    print(f"pending_major_count={len(plan.get('pendingMajor', []))}")
+  return 0
+
+
+def handle_release_version_plan(root: Path, args: argparse.Namespace, apply: bool = False) -> int:
+  data = apply_version_plan(root) if apply else build_version_plan(root)
+  if args.json:
+    print_json(json_envelope(root, data))
+    return 0
+  print(f"base_version={data['baseVersion']}")
+  print(f"base_version_at={data.get('baseVersionAt', '')}")
+  print(f"active_release={data.get('activeRelease', '')}")
+  print(f"package_version={data.get('packageVersion', '')}")
+  print(f"last_planned_version={data['lastPlannedVersion']}")
+  print(f"next_bugfix_version={data['nextBugfixVersion']}")
+  print(f"next_feature_version={data['nextFeatureVersion']}")
+  print(f"pending_major_count={len(data.get('pendingMajor', []))}")
+  if apply:
+    print(f"changed_records={data.get('changedRecords', 0)}")
+  for item in data.get("pendingMajor", []):
+    print(
+      f"major_pending={item['candidateId']}\t"
+      f"proposed_target={item['proposedTarget']}\t"
+      f"summary={item['summary']}"
+    )
+  for item in data.get("records", []):
+    target = item.get("releaseTarget") or "pending-user-confirmation"
+    print(
+      f"record={item['candidateId']}\t"
+      f"type={item['changeType']}\t"
+      f"target={target}\t"
+      f"decision={item['versionDecision']}"
+    )
   return 0
 
 
@@ -1577,6 +1637,10 @@ def main(argv: Optional[list] = None) -> int:
       return handle_cover(root, args)
     if args.command == "release" and args.release_action == "status":
       return handle_release(root, args)
+    if args.command == "release" and args.release_action == "version-plan":
+      return handle_release_version_plan(root, args)
+    if args.command == "release" and args.release_action == "version-backfill":
+      return handle_release_version_plan(root, args, apply=args.apply)
     if args.command == "release" and args.release_action == "transcript-check":
       return handle_transcript_check(root, args)
     if args.command == "release" and args.release_action == "shadow-check":
@@ -1640,7 +1704,7 @@ def main(argv: Optional[list] = None) -> int:
     payload = error_envelope("MEDIA_RETENTION_ERROR", str(error))
     print_json(payload)
     return 3
-  except (EvolutionError, RootDiscoveryError, OSError, json.JSONDecodeError) as error:
+  except (EvolutionError, VersioningError, RootDiscoveryError, OSError, json.JSONDecodeError) as error:
     payload = error_envelope("EVOLUTION_ERROR", str(error))
     print_json(payload)
     return 2

@@ -338,6 +338,11 @@ python3 09_tools/vp.py evolve complete CAND-xxxxxxxxxxxx \
 python3 09_tools/vp.py evolve issues sync \
   --date YYYY-MM-DD \
   --if-enabled
+
+# Inspect and backfill release targets for completed Bug/Feature work
+python3 09_tools/vp.py release version-plan
+python3 09_tools/vp.py release version-backfill --apply
+python3 09_tools/vp.py release status
 ```
 
 All observations are retained, but they do not automatically become Issues. By
@@ -346,10 +351,13 @@ repeated, blocking, high-impact, material-rework, deterministic, or explicitly
 approved work may cross the Issue-readiness gate. Priority only orders work
 after that gate. New eligible work is reconciled immediately; unfinished work
 carries across dates, and a verified completion releases its slot and refills it
-from backlog. Completions enter an append-only
-local ledger and become unassigned Release candidates; they do not bump or
-activate a version. The implementation, contract, tests, and CLI are public,
-while real completion evidence remains local.
+from backlog. Completions enter an append-only local ledger and receive a
+deterministic `releaseTarget`: `bugfix` advances the patch number, `feature`
+advances the minor number, and `major-evolution` remains pending user
+confirmation. The plan never changes `activeRelease` or `package.json.version`;
+Canary, release verification, and explicit activation remain separate gates.
+The implementation, contract, tests, and CLI are public, while real completion
+evidence remains local.
 
 The optional GitHub projection is reconciled after `observe`, `evolve`, and
 verified completion. It creates one Issue per active Top-K candidate.

@@ -14,6 +14,8 @@
     "release:canary-adopt": "python3 09_tools/vp.py release canary-adopt",
     "run:finalize-active": "python3 09_tools/vp.py run finalize-active",
     "release:status": "python3 09_tools/vp.py release status",
+    "release:version-plan": "python3 09_tools/vp.py release version-plan",
+    "release:version-backfill": "python3 09_tools/vp.py release version-backfill --apply",
     "release:readiness": "python3 09_tools/vp.py release readiness",
     "release:activate": "python3 09_tools/vp.py release activate",
     "release:rollback": "python3 09_tools/vp.py release rollback",

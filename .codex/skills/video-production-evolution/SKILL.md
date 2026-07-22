@@ -71,8 +71,17 @@ python3 09_tools/vp.py evolve complete CAND-xxxxxxxxxxxx \
 Completion is append-only and idempotent. It writes
 `00_state/evolution/completed/YYYY-MM-DD.json`, releases the rolling Top-K slot,
 and prevents the completed candidate from returning in a later Loop. A
-completion becomes a Release candidate, but it does not choose a target
-version, bump a version, or change `activeRelease`.
+completion becomes a Release candidate and receives a deterministic
+`releaseTarget`: `bugfix` advances patch, `feature` advances minor, and
+`major-evolution` stays pending user confirmation. This metadata plan never
+bumps `package.json.version` or changes `activeRelease`.
+
+Inspect or backfill the local version plan with:
+
+```bash
+python3 09_tools/vp.py release version-plan
+python3 09_tools/vp.py release version-backfill --apply
+```
 
 When GitHub Issues integration is enabled, `observe`, `evolve`, and `evolve complete` immediately sync the public-safe projection. Manual reconciliation remains available:
 
@@ -123,7 +132,7 @@ Unselected backlog carries into later runs. Each elapsed calendar day raises its
 - Re-running the same date with unchanged inputs must reuse the previous result.
 - Production locks defer the Loop.
 - Invalid NDJSON must not overwrite the original file or the previous successful state.
-- P0 never modifies formal Skills, Rules, Hooks, Agents, production scripts, or versions.
+- P0 never changes published release pointers, formal Skills, Rules, Hooks, Agents, or production paths. Completion may write release-plan metadata only.
 
 ## GitHub Issue Gate
 

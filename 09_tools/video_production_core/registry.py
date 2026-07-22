@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 import json
 
+from .versioning import VersioningError, build_version_plan
+
 
 def load_json(path: Path) -> Dict[str, Any]:
   return json.loads(path.read_text(encoding="utf-8"))
@@ -57,6 +59,10 @@ def get_release_status(root: Path) -> Dict[str, Any]:
   candidate = str(system.get("candidateRelease", "")).strip()
   manifest_path = root / "00_system" / "releases" / candidate / "manifest.json"
   manifest = load_json(manifest_path) if candidate and manifest_path.exists() else None
+  try:
+    version_plan = build_version_plan(root)
+  except (OSError, json.JSONDecodeError, VersioningError) as error:
+    version_plan = {"error": str(error)}
   return {
     "activeRelease": system.get("activeRelease"),
     "candidateRelease": candidate or None,
@@ -65,6 +71,7 @@ def get_release_status(root: Path) -> Dict[str, Any]:
     "productionGuard": release_policy.get("productionGuard", {}),
     "rollback": release_policy.get("rollback", {}),
     "candidateManifest": manifest,
+    "versionPlan": version_plan,
   }
 
 

@@ -3,6 +3,21 @@
   "stableRelease": "2.1.0",
   "candidateRelease": "3.0.0",
   "targetDate": null,
+  "versioning": {
+    "automatic": true,
+    "baseVersion": "3.0.0",
+    "baseVersionAt": "2026-07-14T05:55:55+08:00",
+    "historicalCandidateIds": [
+      "CAND-c0add4a2b60f",
+      "CAND-47d18de9f78f",
+      "CAND-f63c2afe913e",
+      "CAND-15d68136278b",
+      "CAND-355fccd1401c"
+    ],
+    "bugfixBump": "patch",
+    "featureBump": "minor",
+    "majorRequiresUserConfirmation": true
+  },
   "dailyPlanning": {
     "topK": 3,
     "morningPlanTime": "09:00",
